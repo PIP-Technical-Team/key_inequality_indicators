@@ -6,12 +6,13 @@ pacman::p_load(
   plotly, 
   flexdashboard, 
   tidyverse, 
-  pak
+  pak, 
+  hrbrthemes
 )
-if(!find.package("pipr")>1)
-  pak::pkg_install(
-    "worldbank/pipr@httr2"
-)
+# if(!find.package("pipr")>1)
+#   pak::pkg_install(
+#     "worldbank/pipr@main"
+# )
 
 # Step 2: data ----
 dt_pip <- pipr::get_stats()  # install entire data
@@ -30,5 +31,5 @@ pip_countries_multiple_welfare_type    <- dt_pip[, if(.N>1) .SD, by = .(country_
 pip_countries_multiple_reporting_level <- dt_pip[, if(.N>1) .SD, by = .(country_name, year, reporting_level)]$country_name |> unique()
 pip_countries_regions                  <- unique(dt_pip, by = c("country_name", "region_code"))[, .(country_name, region_code)]
 # Exclude double rows
-dt_pip <- dt_pip[, if (.N > 1) .SD[!reporting_level == "rural"] else .SD, by = .(country_name, year, reporting_level)][, if (.N > 1) .SD[reporting_level == "national"] else .SD, by = .(country_name, year, reporting_level)]
-dt_pip <- dt_pip[, if (.N >1) .SD[welfare_type == "income"] else .SD, by = .(country_name, year, reporting_level)]
+dt_pip                                 <- dt_pip[, if (.N > 1) .SD[!reporting_level == "rural"] else .SD, by = .(country_name, year, welfare_type)][, if (.N > 1) .SD[reporting_level == "national"] else .SD, by = .(country_name, year, welfare_type)]
+dt_pip                                 <- dt_pip[, if (.N >1) .SD[welfare_type == "income"] else .SD, by = .(country_name, year, reporting_level)]

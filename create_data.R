@@ -41,8 +41,8 @@ create_data_filtered <- function(
 
 create_data_imputed_by_countries <- function(
     dt, 
-    countries_selected  = c("South Africa", "Colombia"), 
-    year_selected       = 2020, 
+    countries_selected  = c("South Africa", "Colombia", "United States"), 
+    year_selected       = 1998, 
     indicator           = c("Gini"), 
     welfare             = NULL, # if 'consumption' or 'income' then use *only* those
     window_length       = 2 
@@ -63,7 +63,7 @@ create_data_imputed_by_countries <- function(
   ) stop ( "Can only select one year and one indicator" )
   
   # Use copy of dt
-  dt_use <- copy( dt_pip )
+  dt_use <- copy( dt )
   
   # Rename 
   setnames(
@@ -80,6 +80,8 @@ create_data_imputed_by_countries <- function(
     ]
     
   }
+  
+  # Filter by year and country name
   dt_use <- dt_use[        # window length
     year %chin% c( (year_selected - window_length): (year_selected + window_length))
   ]
@@ -88,7 +90,7 @@ create_data_imputed_by_countries <- function(
   ]
   
   # Fill Missing ----
-  dt_use <- merge(
+  dt_use <- joyn::merge(
     CJ(
       country_name = dt_use$country_name |> unique(), 
       year         = dt_use$year         |> unique()
@@ -97,9 +99,11 @@ create_data_imputed_by_countries <- function(
     by = c("country_name", "year")
   )
   dt_use[, missing := ifelse(is.na(Indicator), TRUE, FALSE)] # missing indicator
+  dt_use <- dt_use[, report := NULL]
   
   # If missing, impute forward or backwards
-  dt_forward  <- dt_use[, .SD[c((window_length + 1):.N)], by = country_name][missing == FALSE][, .(Forward = min(year)-1998), by = country_name]
+  setorder(dt_use, country_name, year) # order by year
+  dt_forward  <- dt_use[, .SD[c((window_length + 1):.N)], by = country_name][missing == FALSE][, .(Forward = min(year)-year_selected), by = country_name]
   dt_backward <- dt_use[, .SD[c(1:(window_length + 1))], by = country_name][missing == FALSE][, .(Backward = abs(max(year)-year_selected)), by = country_name]
   dt_use <- joyn::merge(
     dt_use, 
@@ -138,10 +142,20 @@ create_data_imputed_by_countries <- function(
   # Remove columns
   dt_use[, c("Forward", "Backward") := NULL]
   
+  setnames(
+    dt_use, 
+    old = "Indicator", 
+    new = tolower(indicator)
+  )
+  
   # Return
   return(dt_use)
   
 }
+
+dt_use <- create_data_imputed_by_countries(
+  dt = dt_pip
+)
 
 
 create_data_ranked_by_countries <- function(
@@ -153,10 +167,10 @@ create_data_ranked_by_countries <- function(
     window_length       = 2 
     
 ){
-  
+
   # Create Imputed data set ----
   dt_use <- create_data_imputed_by_countries(
-    dt                 = dt, 
+    dt                 = dt_pip, 
     countries_selected = countries_selected, 
     year_selected      = year_selected, 
     indicator          = indicator, 
@@ -164,14 +178,58 @@ create_data_ranked_by_countries <- function(
     window_length      = window_length
   )
   
+  # Rename
+  setnames(
+    dt_use,
+    old     = c(tolower(indicator)),
+    new     = c("Indicator")
+  )
+
   # Rank by country
   dt_use[, Rank := frank(Indicator)]
   
-  # Return
+  setnames(
+    dt_use,
+    old = "Indicator",
+    new = tolower(indicator)
+  )
+  #Return
   return(dt_use)
   
 }
 
+
+
+
+create_data_ranked_all_indicators <- function(
+    dt, 
+    country_selected  = c("United States"), 
+    year_selected       = 2000, 
+    welfare             = NULL, # if 'consumption' or 'income' then use *only* those
+    window_length       = 2 
+){
+  
+
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+create_data_filter_consumption
+
+
+create_data_filter_represen
 
 
 
