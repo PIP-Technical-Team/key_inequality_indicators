@@ -282,7 +282,7 @@ sliderInput("interval",
 
 # Select initial year
 sliderInput("window", 
-             label = "Imputation Window",
+             label = "Circa years window",
              min = 0, max = 5, value = 2, step = 1)
 
 ```
@@ -407,7 +407,7 @@ checkboxInput("allcountries",
 selectInput("region_selected",
             label    = "Select regions to highlight",
             choices  = c(dt_pip$region_code |> unique() |> sort()),
-            selected = "",
+            selected = "SSA",
             multiple = TRUE)
 # Select region for scatter plot to highlight
 selectInput("countries_selected",
@@ -425,51 +425,46 @@ Row {.tabset .tabset-fade}
 
 dt_use_sp <- reactive({
   
+  # Copy pip stats
   dt_use_sp <- copy(dt_pip)
   
+  # Change names of selected indicators
   setnames(
     x = dt_use_sp, 
     old = c(tolower(input$ineq_indicatorX), tolower(input$ineq_indicatorY)), 
     new = c("IndicatorX", "IndicatorY")
   )
   
-  
-  dt_use_sp[
-    , 
-    Region := ""
-  ]
-
+  # get list of selected countries
   if(input$allcountries == TRUE){
-      dt_use_sp[
-        region_code %chin% input$region_selected,
-        Region := region_code
-  ]
+    
+    selected_countries <- dt_pip$country_name |> unique()
+    
+  } else {
+    
+    selected_countries <- c(
+    (pip_countries_regions[country_name %chin% input$countries_selected])$country_name, 
+    (pip_countries_regions[region_code %chin% input$region_selected])$country_name
+  ) |> unique()
+    
   }
-# 
-#   if(input$allcountries == FALSE){
-#       dt_use_sp[
-#         region_code %chin% input$region_selected,
-#         Region := region_code
-#   ]
-#   }
-   
-  # if(!input$country_selected == ""){
-  #     dt_use_sp[
-  #       country_name %chin% input$countries_selected, 
-  #       Region := region_code
-  # ]
-  # }
-  # 
-
+  
+  # Filter for selected countries
+  dt_use_sp[
+     country_name %chin% selected_countries, 
+     Region := region_code
+  ]
+  
+  
 
     })
+
 
 ```
 
 
 ```{r plot2}
-#renderDataTable(dt_use_sp())
-# 
+
 renderPlotly({
 
   sp1 <- ggplot(dt_use_sp()) +
@@ -478,23 +473,26 @@ renderPlotly({
     x = input$ineq_indicatorX,
     y = input$ineq_indicatorY
   ) +
-  theme_classic()+ 
+  theme_classic()+
     theme(legend.position = "none")
 
+  # Log the axes
   if(input$log_y == TRUE & input$log_x == TRUE){
-    sp1 <- sp1 +
+   sp1 <- sp1 +
           geom_point(aes(
       x = log(IndicatorX),
       y = log(IndicatorY),
-      color = region_code
+      color = Region
     ))
-  }
+
+    }
+
   if(input$log_y == TRUE & input$log_x == FALSE){
     sp1 <- sp1 +
           geom_point(aes(
       x = IndicatorX,
       y = log(IndicatorY),
-      color = region_code
+      color = Region
     ))
   }
   if(input$log_y == FALSE & input$log_x == TRUE){
@@ -502,7 +500,7 @@ renderPlotly({
           geom_point(aes(
       x = log(IndicatorX),
       y = IndicatorY,
-      color = region_code
+      color = Region
     ))
   }
   if(input$log_y == FALSE & input$log_x == FALSE){
@@ -510,9 +508,12 @@ renderPlotly({
           geom_point(aes(
       x = IndicatorX,
       y = IndicatorY,
-      color = region_code
+      color = Region
     ))
   }
+
+  #
+
 
   ggplotly(sp1)
 
@@ -522,4 +523,123 @@ renderPlotly({
 ```
 
 
+
+
+
+
+Trends
+===========================================================
+
+
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r sidebar-plot-3}
+# Select Indicator
+selectInput("ineq_indicatorY_3", 
+            label = "Indicator y-axis:",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "Mld", 
+              "Gini", 
+              "Polarization", 
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Mean")
+
+
+checkboxInput("log_y_3", 
+              label = "show Y-axis in log tranform",  
+              value = FALSE)
+
+
+# Select region for scatter plot to highlight
+selectInput("countries_selected_3",
+            label    = "Select countries to highlight",
+            choices  = c(dt_pip$country_name |> unique() |> sort()),
+            selected = c("South Africa", "Colombia", "United States"),
+            multiple = TRUE)
+
+```
+
+Row {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+
+
+```{r data-filter3}
+
+dt_trend_plot <- reactive({
+  
+  # Copy data table
+  dt_trend_plot <- copy(dt_pip)
+  
+  # rename
+ 
+  
+  # Filter for selected countries
+  dt_trend_plot <- dt_trend_plot[
+     country_name %chin% input$countries_selected_3
+  ]
+  
+  # Rename
+  setnames(
+    dt_trend_plot, 
+    old = tolower(input$ineq_indicatorY_3), 
+    new = "IndicatorY"
+  )
+  
+  
+  
+  
+})
+
+```
+
+
+
+
+```{r plot3}
+
+renderPlotly({
+  
+ tp1 <-  ggplot(
+    dt_trend_plot()
+  ) +
+  labs(
+    title = paste(input$ineq_indicatorY_3, "over time"), 
+    subtitle = "Selected countries", 
+    x = "Year", 
+    y = input$ineq_indicatorY_3, 
+    color = "Country", 
+    shape = "Region"
+  )+
+  theme_classic() +
+    theme(legend.position = "none")
+
+ if(input$log_y_3 == TRUE){
+   
+     tp1 <- tp1  +
+    geom_point(
+      aes(x = year, y = log(IndicatorY), color = country_name), size = 2
+    ) + 
+    geom_line(aes(x = year, y = log(IndicatorY), color = country_name, group = comparable_spell), size = 1) 
+
+
+ }else{
+  tp1 <- tp1  +
+    geom_point(
+      aes(x = year, y = IndicatorY, color = country_name), size = 2
+    ) + 
+    geom_line(aes(x = year, y = IndicatorY, color = country_name, group = comparable_spell), size = 1) 
+}
+
+  ggplotly(tp1)
+
+})
+
+```
 
