@@ -153,9 +153,6 @@ create_data_imputed_by_countries <- function(
   
 }
 
-dt_use <- create_data_imputed_by_countries(
-  dt = dt_pip
-)
 
 
 create_data_ranked_by_countries <- function(
