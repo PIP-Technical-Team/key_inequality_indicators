@@ -192,7 +192,7 @@ create_data_imputed_by_countries_two_years <- function(
     old = tolower(indicator), 
     new = c("Indicator1")
   )
-  dt1 <- dt1[, .(country_name, year, Indicator1)]
+  dt1 <- dt1[, .(country_name, year, Indicator1, mean)]
 
   # Data in Year 2
   dt2 <- create_data_imputed_by_countries(
@@ -224,6 +224,7 @@ create_data_imputed_by_countries_two_years <- function(
   dt_use[, Change := Indicator1-Indicator2]
   dt_use[, AnnualizedChange := Change/abs(year2_selected-year1_selected)]
   dt_use[, ChangeColor := ifelse(Change<0, "Negative", "Positive")]
+  dt_use[, Change := abs(Change)]
   
   # Change column names back to true indicator names
   # setnames(
@@ -512,8 +513,9 @@ renderPlotly({
        ), 
        arrow = arrow(length = unit(1.2, "mm"), type = "closed")
     ) +
-  geom_point(aes(x = Indicator2, y = country_name, color = ChangeColor), shape = 2, size = 0.5)+
-  geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor), size = 1) +
+  geom_point(aes(x = Indicator2, y = country_name, color = ChangeColor, alpha = Change), shape = 2, size = 0.8)+
+  geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor, 
+         size = mean)) +
   theme_classic()+
   labs(
     title = paste("Change in", input$ineq_indicator, "from", as.numeric(input$initial_year), "to", as.numeric(input$initial_year) + as.numeric(input$interval)),
@@ -578,6 +580,22 @@ selectInput("ineq_indicatorY",
             ),
             selected = "Mean")
 
+checkboxInput("add_line", 
+              label = "Add line", 
+              value = FALSE)
+
+radioButtons("select_reporting_level", 
+              label = "Reporting Level", 
+              choices = c("All", "National", "Urban", "Rural"), 
+              selected = "All"
+)
+
+
+radioButtons( "select_welfare_type", 
+              label = "Welfare Type", 
+              choices = c("All", "Consumption", "Income"), 
+              selected = "All"
+)
 
 checkboxInput("log_y", 
               label = "show Y-axis in log tranform",  
@@ -641,8 +659,7 @@ dt_use_sp <- reactive({
      country_name %chin% selected_countries, 
      Region := region_code
   ]
-  
-  
+
 
     })
 
@@ -662,6 +679,28 @@ selected_countries <- reactive({
   ) |> unique()
     
   }
+  
+  # reporting level
+  if(!input$select_reporting_level == c("All")){
+    selected_countries <- intersect(
+      selected_countries, 
+      dt_pip[reporting_level == tolower(input$select_reporting_level)]$country_name
+    ) |> unique()
+  }else {
+    selected_countries
+  }
+  
+    # welfare
+  if(!input$select_welfare_type == c("All")){
+    selected_countries <- intersect(
+      selected_countries, 
+      dt_pip[welfare_type == tolower(input$select_welfare_type)]$country_name
+    ) |> unique()
+  }else {
+    selected_countries
+  }
+  
+  
 })
 
 ```
@@ -687,8 +726,20 @@ renderPlotly({
       x = log(IndicatorX),
       y = log(IndicatorY),
       color = Region
-    ))+
-     gghighlight(country_name %chin% selected_countries())
+    ))  
+   
+    # add line
+    if(input$add_line == TRUE){
+        sp1 <- sp1 +
+          geom_smooth(
+            aes(
+      x = log(IndicatorX),
+      y = log(IndicatorY),
+      stat = "smooth",
+      position = "identity"
+            )
+          )
+  }
 
     }
 
@@ -698,8 +749,19 @@ renderPlotly({
       x = IndicatorX,
       y = log(IndicatorY),
       color = Region
-    ))+
-     gghighlight(country_name %chin% selected_countries())
+    ))    
+    # add line
+    if(input$add_line == TRUE){
+        sp1 <- sp1 +
+          geom_smooth(
+            aes(
+      x = IndicatorX,
+      y = log(IndicatorY),
+      stat = "smooth",
+      position = "identity"
+            )
+          )
+  }
 
   }
   if(input$log_y == FALSE & input$log_x == TRUE){
@@ -708,8 +770,18 @@ renderPlotly({
       x = log(IndicatorX),
       y = IndicatorY,
       color = Region
-    ))+
-     gghighlight(country_name %chin% selected_countries())
+    ))    # add line
+    if(input$add_line == TRUE){
+        sp1 <- sp1 +
+          geom_smooth(
+            aes(
+      x = log(IndicatorX),
+      y = IndicatorY,
+      stat = "smooth",
+      position = "identity"
+            )
+          )
+  }
 
   }
   if(input$log_y == FALSE & input$log_x == FALSE){
@@ -718,12 +790,25 @@ renderPlotly({
       x = IndicatorX,
       y = IndicatorY,
       color = Region
-    ))+
-     gghighlight(country_name %chin% selected_countries())
+    ))    # add line
+    if(input$add_line == TRUE){
+        sp1 <- sp1 +
+          geom_smooth(
+            aes(
+      x = IndicatorX,
+      y = IndicatorY,
+      stat = "smooth",
+      position = "identity"
+            )
+          )
+  }
 
   }
 
-  #
+  # Highlight countries
+  sp1 <- sp1 + 
+    gghighlight(country_name %chin% selected_countries())
+
 
 
   ggplotly(sp1)
