@@ -347,19 +347,25 @@ checkboxGroupInput("ineq_indicator_table",
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
-            selected = "Gini")
+            selected = c("Mean", 
+              "Median", 
+              "Mld", 
+              "Gini", 
+              "Polarization", 
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"))
 
-radioButtons("tick_all_countries_table", 
-              label = "Select countries", 
-              choices = c("All Countries", "Make Selection Below"), 
-             selected = c("Make Selection Below")
-)
+# radioButtons("tick_all_countries_table", 
+#               label = "Select countries", 
+#               choices = c("All Countries", "Make Selection Below"), 
+#               selected = c("All Countries")
+# )
 
 
 selectInput("select_countries_table", 
             label = "Countries:",
-            choices = pip_countries,
-            selected = c("South Africa"), 
+            choices = c("All", pip_countries),
+            selected = c("All"), 
             multiple = TRUE)
 
 selectInput("regions_table", 
@@ -371,7 +377,7 @@ selectInput("regions_table",
 radioButtons("all_years_table", 
                    label = "Years shown in table",  
                    choices = c("Latest", "All"), 
-                   selected = c("Latest"))
+                   selected = c("All"))
 
 # Render download button
 #downloadButton("downloadData", "Download CSV")
@@ -387,7 +393,6 @@ downloadLink(
 Row {.tabset .tabset-fade}
 -----------------------------------------------------------------------
 
-### Table
 
 
 ```{r plot-table}
@@ -513,7 +518,7 @@ table <-
     # Filter countries
     
     ct <- 
-      if (input$tick_all_countries_table == "All Countries") {
+      if ("All" %chin% input$select_countries_table) {
       pip_countries
     } else {
       c(input$select_countries_table,
@@ -627,7 +632,7 @@ sliderInput("window",
 Column {data-width=900 .tabset .tabset-fade}
 -----------------------------------------------------------------------
 
-### Change Over Time
+### 
 
 ```{r data-filter-1}
 dt_use <- reactive({
@@ -798,35 +803,32 @@ checkboxInput("add_line",
               label = "Add line", 
               value = FALSE)
 
-radioButtons("select_reporting_level", 
+selectInput("select_reporting_level", 
               label = "Reporting Level", 
               choices = c("All", "National", "Urban", "Rural"), 
               selected = "All"
 )
 
 
-radioButtons( "select_welfare_type", 
+selectInput( "select_welfare_type", 
               label = "Consumption or Income", 
               choices = c("Both", "Consumption", "Income"), 
               selected = "Both"
 )
 
-checkboxInput("log_y", 
-              label = "show Y-axis in log tranform",  
-              value = FALSE)
-checkboxInput("log_x", 
-              label = "show X-axis in log tranform",  
-              value = FALSE)
+checkboxGroupInput(
+  inputId  = "log_transformations", 
+  label    = "Log Transformations:", 
+  choices  = c("X axis", "Y axis"), 
+  selected = NULL
+)
 
-# Select region for scatter plot to highlight
-checkboxInput("allcountries", 
-              label = "Select All Regions",  
-              value = TRUE)
+
 
 selectInput("region_selected",
             label    = "Select regions to highlight",
-            choices  = c(dt_pip$region_code |> unique() |> sort()),
-            selected = "SSA",
+            choices  = c("All", dt_pip$region_code |> unique() |> sort()),
+            selected = "All",
             multiple = TRUE)
 # Select region for scatter plot to highlight
 selectInput("countries_selected",
@@ -852,7 +854,7 @@ Column {data-width=1000 .tabset .tabset-fade}
 selected_countries <- reactive({
     
   # get list of selected countries
-  if(input$allcountries == TRUE){
+  if(c("All") %chin% input$region_selected){
     
     selected_countries <- dt_pip$country_name |> unique()
     
@@ -918,33 +920,13 @@ dt_use_sp <- reactive({
     
   }else{dt_use_sp}
 
-  # # get list of selected countries
-  # if(input$allcountries == TRUE){
-  #   
-  #   selected_countries <- dt_pip$country_name |> unique()
-  #   
-  # } else {
-  #   
-  #   selected_countries <- c(
-  #   (pip_countries_regions[country_name %chin% input$countries_selected])$country_name, 
-  #   (pip_countries_regions[region_code %chin% input$region_selected])$country_name
-  # ) |> unique()
-  #   
-  # }
-  # 
-  # # Filter for selected countries
-  # dt_use_sp[
-  #    country_name %chin% selected_countries, 
-  #    Region := region_code
-  # ]
-
 
     })
 
 
 ```
 
-### Scatterplot of indicators
+### 
 
 ```{r plot2}
 
@@ -956,10 +938,13 @@ renderPlotly({
     x = input$ineq_indicatorX,
     y = input$ineq_indicatorY, 
     color = "Region"
-  )+
+  )
   
   # Log the axes
-  if(input$log_y == TRUE & input$log_x == TRUE){
+  if(
+    c("Y axis") %chin% input$log_transformations & 
+    c("X axis") %chin% input$log_transformations
+  ){
    sp1 <- sp1 +
           geom_point(aes(
       x = log(IndicatorX),
@@ -982,7 +967,10 @@ renderPlotly({
 
     }
 
-  if(input$log_y == TRUE & input$log_x == FALSE){
+  if(
+    (c("Y axis") %chin% input$log_transformations) & 
+    !(c("X axis") %chin% input$log_transformations)
+  ){
     sp1 <- sp1 +
           geom_point(aes(
       x = IndicatorX,
@@ -1003,7 +991,10 @@ renderPlotly({
   }
 
   }
-  if(input$log_y == FALSE & input$log_x == TRUE){
+  if(
+    !(c("Y axis") %chin% input$log_transformations) & 
+    (c("X axis") %chin% input$log_transformations)
+  ){
     sp1 <- sp1 +
           geom_point(aes(
       x = log(IndicatorX),
@@ -1023,7 +1014,10 @@ renderPlotly({
   }
 
   }
-  if(input$log_y == FALSE & input$log_x == FALSE){
+  if(
+    !(c("Y axis") %chin% input$log_transformations) & 
+    !(c("X axis") %chin% input$log_transformations)
+  ){
     sp1 <- sp1 +
           geom_point(aes(
       x = IndicatorX,
@@ -1101,7 +1095,7 @@ p("This scatterplot shows the relationship between your two selected inequality 
 
 p("The plot provides a feature for incorporating a line to depict the underlying relationship between variables. This line represents the conditional mean, estimated via locally estimated scatterplot smoothing (LOESS), and is accompanied by 95% confidence intervals.")
 
-
+p(strong("Hint:", style = "black"), "Click on the region in the legend to remove from the plot.")
 ```
 
 
@@ -1144,11 +1138,11 @@ selectInput("ineq_indicatorY_3_fig2",
             selected = "Gini")
 
 checkboxInput("log_y_3_fig1", 
-              label = "Log transformation in Figure 1",  
+              label = "Log Y axis in Figure 1",  
               value = FALSE)
 
 checkboxInput("log_y_3_fig2", 
-              label = "Log transformation in Figure 2",  
+              label = "Log Y axis in Figure 2",  
               value = FALSE)
 
 # Select region for scatter plot to highlight
