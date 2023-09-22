@@ -37,16 +37,59 @@ dt_pip[
     top_20_bottom_20_ratio = (decile10+decile9)/(decile1 + decile2)
   )
 ]
-dt_pip[, gini:= gini*100]
+dt_pip[, 
+       gini:= gini*100]
 
 # Step 2: creating general objects ----
-pip_countries                          <- dt_pip$country_name |> unique() # list of countries
-pip_countries_multiple_welfare_type    <- dt_pip[, if(.N>1) .SD, by = .(country_name, year, welfare_type)]$country_name |> unique()
-pip_countries_multiple_reporting_level <- dt_pip[, if(.N>1) .SD, by = .(country_name, year, reporting_level)]$country_name |> unique()
-pip_countries_regions                  <- unique(dt_pip, by = c("country_name", "region_code"))[, .(country_name, region_code)]
+pip_countries <- unique(dt_pip$country_name) # list of countries
+pip_countries_multiple_welfare_type <- 
+  dt_pip[, 
+         if(.N>1) .SD, 
+         by = .(country_name, year, welfare_type)
+         ]$country_name |>
+  unique()
+
+pip_countries_multiple_reporting_level <- 
+  dt_pip[, 
+         if(.N > 1) 
+           .SD, 
+         by = .(country_name, year, reporting_level)
+         ]$country_name |> 
+  unique()
+
+pip_countries_regions <- 
+  unique(dt_pip, 
+         by = c("country_name", "region_code")
+         )[, 
+           .(country_name, region_code)
+           ]
+
 # Exclude double rows
-dt_pip                                 <- dt_pip[, if (.N > 1) .SD[!reporting_level == "rural"] else .SD, by = .(country_name, year, welfare_type)][, if (.N > 1) .SD[reporting_level == "national"] else .SD, by = .(country_name, year, welfare_type)]
-dt_pip                                 <- dt_pip[, if (.N >1) .SD[welfare_type == "income"] else .SD, by = .(country_name, year, reporting_level)]
+dt_pip <- 
+  dt_pip[, 
+         if (.N > 1) {
+           .SD[!reporting_level == "rural"] 
+          } else {
+            .SD
+            }, 
+         by = .(country_name, year, welfare_type)
+         ][, 
+           if (.N > 1) {
+             .SD[reporting_level == "national"] 
+             } else {
+               .SD
+               }, 
+           by = .(country_name, year, welfare_type)
+           ]
+dt_pip <- 
+  dt_pip[, 
+         if (.N > 1) {
+           .SD[welfare_type == "income"] 
+           } else {
+             .SD
+             }, 
+         by = .(country_name, year, reporting_level)
+         ]
 
 ```
 
@@ -99,7 +142,8 @@ create_data_imputed_by_countries <- function(
   
   # Filter by year and country name
   dt_use <- dt_use[        # window length
-    year %chin% c( (year_selected - window_length): (year_selected + window_length))
+    year %chin% c( (year_selected - window_length):
+                     (year_selected + window_length))
   ]
   dt_use <- dt_use[
     country_name %chin% countries_selected
@@ -119,9 +163,28 @@ create_data_imputed_by_countries <- function(
   
   # If missing, impute forward or backwards
   setorder(dt_use, country_name, year) # order by year
-  dt_forward  <- dt_use[, .SD[c((window_length + 1):.N)], by = country_name][missing == FALSE][, .(Forward = min(year)-year_selected), by = country_name]
-  dt_backward <- dt_use[, .SD[c(1:(window_length + 1))], by = country_name][missing == FALSE][, .(Backward = abs(max(year)-year_selected)), by = country_name]
-  dt_use <- joyn::merge(
+  dt_forward  <- 
+    dt_use[,
+           .SD[c((window_length + 1):.N)], 
+           by = country_name
+           ][
+             missing == FALSE
+             ][, 
+               .(Forward = min(year)-year_selected), 
+               by = country_name
+               ]
+dt_backward <- 
+  dt_use[, 
+         .SD[c(1:(window_length + 1))], 
+         by = country_name
+         ][
+           missing == FALSE
+           ][, 
+             .(Backward = abs(max(year)-year_selected)), 
+             by = country_name
+             ]
+
+dt_use <- joyn::merge(
     dt_use, 
     dt_forward, 
     by = c("country_name"), 
@@ -129,6 +192,7 @@ create_data_imputed_by_countries <- function(
     match_type = "m:1", 
     keep = "left"
   )
+
   dt_use <- dt_use[, report := NULL]
   dt_use <- joyn::merge(
     dt_use, 
@@ -144,11 +208,16 @@ create_data_imputed_by_countries <- function(
   dt_use[, Impute_Forward := (Backward >= Forward)]
   
   # Do imputation
-  dt_use[, Indicator := {
+  dt_use[, 
+         Indicator := {
     # Forward fill for Impute_Forward == FALSE
-    Indicator[Impute_Forward == FALSE] <- nafill(Indicator[Impute_Forward == FALSE], type = "locf")
+    Indicator[Impute_Forward == FALSE] <- 
+      nafill(Indicator[Impute_Forward == FALSE], 
+             type = "locf")
     # Backward fill for Impute_Forward == TRUE
-    Indicator[Impute_Forward == TRUE] <- nafill(Indicator[Impute_Forward == TRUE], type = "nocb")
+    Indicator[Impute_Forward == TRUE] <- 
+      nafill(Indicator[Impute_Forward == TRUE], 
+             type = "nocb")
     # Return the modified Indicator
     Indicator
   }, by = country_name]
@@ -266,11 +335,6 @@ Sidebar {.sidebar data-width=250}
 
 ```{r sidebar-table-1}
 
-downloadLink(
-  outputId = "downloadButton", 
-  label = "Download as csv"
-)
-
 # Select Indicator
 checkboxGroupInput("ineq_indicator_table", 
             label = "Indicators:",
@@ -311,6 +375,10 @@ radioButtons("all_years_table",
 
 # Render download button
 #downloadButton("downloadData", "Download CSV")
+downloadLink(
+  outputId = "downloadData", 
+  label = "Download as csv"
+)
 
 
 ```
@@ -384,7 +452,11 @@ make_table_across_countries <- function(
     "Welfare_type",
     ineq_indicators
   )
-  selected_cols <- selected_cols |> str_replace_all(" ", "_") |> str_to_lower() |> str_to_title()
+  selected_cols <- 
+    selected_cols |> 
+    str_replace_all(" ", "_") |> 
+    str_to_lower() |> 
+    str_to_title()
   
   setnames(
     dt,
@@ -406,20 +478,23 @@ make_table_across_countries <- function(
     ,
     (names(dt)) := lapply(                       # Round to 2 decimals
       .SD,
-      function(x){if(is.numeric(x)) round(x, 2) else x}
+      \(x){
+        if (is.numeric(x)) 
+          round(x, 2) 
+        else 
+          x
+        }
     )
   ]
   
   
   
   if(years_selected == "Latest"){
-    dt <- dt[, .SD[which.max(Year)], by = Country]
+    dt <- dt[, 
+             .SD[which.max(Year)], 
+             by = Country]
   }
   
-  list_of_columns <- lapply(
-    names(dt), function(col_name) {              # Make the columns list items for plotly
-      return(dt[[col_name]])
-    })
   
   setorder(dt, Country, Region, -Year, Reporting_level, Welfare_type)
   
@@ -428,14 +503,54 @@ make_table_across_countries <- function(
     old = c("Welfare_type"), 
     new = c("Consumption_or_Income")
   )
+  dt # return
+} # end of make_table_across_countries()
+
+
+
+table <-
+  reactive({
+    # Filter countries
+    
+    ct <- 
+      if (input$tick_all_countries_table == "All Countries") {
+      pip_countries
+    } else {
+      c(input$select_countries_table,
+        pip_countries_regions[region_code %chin%
+                                input$regions_table]$country_name
+        ) |>
+        unique()
+    }
+    
+    make_table_across_countries(
+      dt               = dt_pip,
+      country_name_vec = ct,
+      ineq_indicators  = input$ineq_indicator_table,
+      years_selected   = input$all_years_table
+  )
+})
+
   
-  # Plot Table ----
+
+renderPlotly({
   
-  p <- plot_ly(
+list_of_columns <- lapply(
+    names(table()), 
+    \(col_name) { # Make the columns list items for plotly
+      return(table()[[col_name]])
+    })
+  
+  # plot table
+  plot_ly(
     type = 'table',
     #columnwidth = c(100, 100),
     header = list(
-      values = dt |> colnames() |> str_replace_all(pattern = "_", replacement = " "), # column names vector
+      values = table() |> 
+        colnames() |> 
+        # column names vector
+        str_replace_all(pattern = "_", 
+                        replacement = " "), 
       align = c("center", "center"),
       line = list(width = 1, color = 'black'),
       fill = list(color = c("grey", "grey")),
@@ -443,60 +558,24 @@ make_table_across_countries <- function(
     ),
     cells = list(
       values = list_of_columns,
-      align = c("center", "center"),
-      line = list(color = "black", width = 1),
-      font = list(family = "Arial", size = 12, color = c("black"))
+      align  = c("center", "center"),
+      line   = list(color = "black", width = 1),
+      font   = list(family = "Arial", size = 12, color = c("black"))
     ))
-  
-  p
-  
-}
+})
+
 
 
 output$downloadData <- downloadHandler(
   filename = function() {
-    paste("data-", Sys.Date(), ".csv", sep = "")
+    paste("PIP-key-ineq-indicators_", Sys.Date(), ".csv", sep = "")
   },
   content = function(file) {
-    data_to_download <- make_table_across_countries(
-      dt = dt_pip,
-      country_name_vec = countries_table,
-      ineq_indicators = input$ineq_indicator_table,
-      years_selected = input$all_years_table
-    )
-    write.csv(data_to_download, file)
+    write.csv(table(), file)
   }
 )
 
 
-
-renderPlotly({
-  
-  countries_table <- c()
-  
-  # Filter countries
-  if(input$tick_all_countries_table == "All Countries"){
-    countries_table <- pip_countries
-  } else{
-    
-    countries_table <- c(
-      input$select_countries_table, 
-      pip_countries_regions[region_code %chin% input$regions_table]$country_name
-    ) |> unique()
-    
-    
-  }
-  
-  # Make table
-  
-  table <- make_table_across_countries(
-    dt = dt_pip,
-    country_name_vec = countries_table,
-    ineq_indicators = input$ineq_indicator_table,
-    years_selected = input$all_years_table
-  )
-  table
-})
 
 ```
 
