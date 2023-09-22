@@ -837,7 +837,7 @@ selectInput("countries_selected",
 
 checkboxInput("plot_only_selected_countries",
               label = "Plot only selected countries/regions", 
-              value = FALSE
+              value = TRUE
 )
 
 ```
@@ -1342,7 +1342,7 @@ dt_trend_plotly <- ggplotly(tp1)
 for (i in 1:length(dt_trend_plotly$x$data)) {
   dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
     "Year: %{x}<br>",
-    "IndicatorY: %{y}<br>"#,
+    input$ineq_indicatorY_3_fig2, ": %{y}<br>"#,
     #"Country: %{text}"
   )
  # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
