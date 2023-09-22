@@ -1,0 +1,13 @@
+name: test-publish-22
+title: test-publish-2
+username: zprinsloo
+account: zprinsloo
+server: w0lxopshyprd1b.worldbank.org
+hostUrl: http://w0lxopshyprd1b.worldbank.org:3939/__api__
+appId: 1304
+bundleId: 49632
+url: http://w0lxopshyprd1b.worldbank.org:3939/content/779182b3-8f56-43ba-816a-e332e6aebccf/
+when: 1694798684.78053
+lastSyncTime: 1694798684.78055
+asMultiple: FALSE
+asStatic: FALSE

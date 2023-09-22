@@ -1,0 +1,14 @@
+name: key_inequality_indicators
+title: key_inequality_indicators
+username: zprinsloo
+account: zprinsloo
+server: w0lxopshyprd1b.worldbank.org
+hostUrl: http://w0lxopshyprd1b.worldbank.org:3939/__api__
+appId: 1295
+bundleId: 49676
+url: http://w0lxopshyprd1b.worldbank.org:3939/content/68ff3ae8-e025-4912-937d-1b5b653b4343/
+when: 1695152288.71715
+lastSyncTime: 1695152288.71717
+asMultiple: TRUE
+asStatic: FALSE
+ignoredFiles: inequality_indicators_backup.Rmd|test-publish.Rmd

@@ -1,0 +1,14 @@
+name: test-publish
+title: test-publish
+username: zprinsloo
+account: zprinsloo
+server: w0lxopshyprd1b.worldbank.org
+hostUrl: http://w0lxopshyprd1b.worldbank.org:3939/__api__
+appId: 1302
+bundleId: 49611
+url: http://w0lxopshyprd1b.worldbank.org:3939/content/4eb57bec-7ca3-4d8b-a186-32b69dddb45b/
+when: 1694796568.84162
+lastSyncTime: 1694796568.84163
+asMultiple: TRUE
+asStatic: FALSE
+ignoredFiles: key_inequality_indicators.Rmd
