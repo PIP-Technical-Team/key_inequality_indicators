@@ -648,9 +648,13 @@ dt_use <- reactive({
 
 ```{r plot1}
 renderPlotly({
-
+dt1 <- dt_use()
+dt1[
+  , 
+  MeanWelfare := round(MeanWelfare, 2)
+]
   p <- ggplot(
-    data = dt_use(),
+    data = dt1,
   ) +
     geom_segment(
        aes(
@@ -662,7 +666,7 @@ renderPlotly({
        ), 
        arrow = arrow(length = unit(1.2, "mm"), type = "closed")
     ) +
-  geom_point(aes(x = Indicator2, y = country_name, color = ChangeColor#, alpha = Change
+  geom_point(aes(x = Indicator2, y = country_name, color = ChangeColor
                  ), shape = 2, size = 0.8)+
   geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor, 
          size = MeanWelfare)) +
@@ -684,8 +688,34 @@ renderPlotly({
       scale_color_manual(values = c("Negative" = "red", "Positive" = "darkgreen"))
   }
   
-  ggplotly(p)
 
+# Convert to plotly object
+pp <- ggplotly(p)
+
+# Loop through each trace to set custom hovertemplate
+for (i in 1:length(pp$x$data)) {
+  
+  # For segments
+  if(pp$x$data[[i]]$type == 'scatter' && is.null(pp$x$data[[i]]$mode)) {
+    pp$x$data[[i]]$hovertemplate <- paste0(
+      "Initial",input$ineq_indicator, ": %{x}<br>",
+      "Change: %{xend}<br>",
+      "Country: %{y}<br>"
+    )
+  }
+  
+  # For points
+  if(pp$x$data[[i]]$type == 'scatter' && pp$x$data[[i]]$mode == 'markers') {
+    pp$x$data[[i]]$hovertemplate <- paste0(
+      input$ineq_indicator, ": %{x}<br>",
+      "Country: %{y}<br>"#,
+      #"Mean Welfare: %{marker.size}<br>"
+    )
+  }
+}
+
+# Display the plot
+pp
 })
 ```
 
@@ -1038,8 +1068,20 @@ renderPlotly({
 )
 
 
+# Convert to plotly object
+sp1_plotly <- ggplotly(sp1)
 
-  ggplotly(sp1, dynamicTicks = TRUE, originalData = FALSE)
+# Loop through each trace to set custom hovertemplate
+for (i in 1:length(sp1_plotly$x$data)) {
+  sp1_plotly$x$data[[i]]$hovertemplate <- paste0(
+    input$ineq_indicatorX, ": %{x}<br>",
+    input$ineq_indicatorY, ": %{y}<br>"
+  )
+  sp1_plotly$x$data[[i]]$hoverinfo <- "none" # Suppress default hoverinfo
+}
+
+# Display the plot
+sp1_plotly
 
 })
 
@@ -1214,8 +1256,8 @@ if(input$log_y_3_fig1 == TRUE){
 
 # Add geom_point and geom_line
 tp1 <- tp1 +
-  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 2) +
-  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name), size = 2) +
+  geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
   scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
 
 # Add geom_text for labeling the first point for each country
@@ -1225,9 +1267,19 @@ tp1 <- tp1 +
             aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
             size = 3.5)
 
-# Render the ggplot object using ggplotly
-ggplotly(tp1)
+dt_trend_plotly <- ggplotly(tp1)
 
+# Loop through traces to update hovertemplate
+for (i in 1:length(dt_trend_plotly$x$data)) {
+  dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
+    "Year: %{x}<br>",
+    input$ineq_indicatorY_3_fig1, ": %{y}<br>"#,
+    #"Country: %{text}"
+  )
+ # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
+}
+
+dt_trend_plotly
 
 
 })
@@ -1284,9 +1336,19 @@ tp1 <- tp1 +
             aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
             size = 3.5)
 
-# Render the ggplot object using ggplotly
-ggplotly(tp1)
+dt_trend_plotly <- ggplotly(tp1)
 
+# Loop through traces to update hovertemplate
+for (i in 1:length(dt_trend_plotly$x$data)) {
+  dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
+    "Year: %{x}<br>",
+    "IndicatorY: %{y}<br>"#,
+    #"Country: %{text}"
+  )
+ # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
+}
+
+dt_trend_plotly
 
 })
 

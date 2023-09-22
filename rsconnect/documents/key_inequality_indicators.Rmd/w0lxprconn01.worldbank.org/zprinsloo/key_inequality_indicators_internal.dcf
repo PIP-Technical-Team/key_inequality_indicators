@@ -5,9 +5,9 @@ account: zprinsloo
 server: w0lxprconn01.worldbank.org
 hostUrl: http://w0lxprconn01.worldbank.org:3939/__api__
 appId: 1370
-bundleId: 9902
-url: http://w0lxprconn01.worldbank.org:3939/content/4b4370b2-c96d-49ab-9083-c288b9dbbb60/
-when: 1695396934.45417
-lastSyncTime: 1695396934.45418
+bundleId: 9904
+url: http://w0lxprconn01.worldbank.org:3939/pip_key_inequality_indicators_internal/
+when: 1695406207.27731
+lastSyncTime: 1695406207.27732
 asMultiple: FALSE
 asStatic: FALSE
