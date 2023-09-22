@@ -1106,38 +1106,50 @@ Column {.tabset .tabset-fade}
 
 renderPlotly({
   
- tp1 <-  ggplot(
-    dt_trend_plot1()
-  ) +
+# Assuming dt_trend plot1 is a function that returns your data in data.table format
+dt <- dt_trend_plot1()
+
+# Create a subset with only the first points for each country
+dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
+first_points = dt[, .SD[which.min(year)], by = country_name]
+first_points = first_points[dt, on = .(country_name), nomatch = 0]
+
+
+# Initialize ggplot object
+tp1 <- ggplot(dt) +
   labs(
     title = paste(input$ineq_indicatorY_3_fig1, "over time"), 
     subtitle = "Selected countries", 
     x = "Year", 
-    y = input$ineq_indicatorY_3_fig1, 
-    color = "Country", 
-    shape = "Region"
-  )+
+    y = input$ineq_indicatorY_3_fig1
+  ) +
   theme_classic() +
-    theme(legend.position = "bottom")
+  theme(legend.position = "none")
 
- if(input$log_y_3_fig1 == TRUE){
-   
-     tp1 <- tp1  +
-    geom_point(
-      aes(x = year, y = log(IndicatorY), color = country_name), size = 2
-    ) + 
-    geom_line(aes(x = year, y = log(IndicatorY), color = country_name, group = comparable_spell), size = 1) 
-
-
- }else{
-  tp1 <- tp1  +
-    geom_point(
-      aes(x = year, y = IndicatorY, color = country_name), size = 2
-    ) + 
-    geom_line(aes(x = year, y = IndicatorY, color = country_name, group = comparable_spell), size = 1) 
+# Conditional logic for log transformation
+if(input$log_y_3_fig1 == TRUE){
+  transformation <- function(x) log(x)
+} else {
+  transformation <- function(x) x
 }
 
-  ggplotly(tp1)
+# Add geom_point and geom_line
+tp1 <- tp1 +
+  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 2) +
+  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
+
+# Add geom_text for labeling the first point for each country
+tp1 <- # Add geom_text for labeling the first point for each country
+tp1 <- tp1 +
+  geom_text(data = first_points, 
+            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
+            size = 3.5)
+
+# Render the ggplot object using ggplotly
+ggplotly(tp1)
+
+
 
 })
 
@@ -1153,38 +1165,49 @@ Column {.tabset .tabset-fade}
 
 renderPlotly({
   
- tp1 <-  ggplot(
-    dt_trend_plot2()
-  ) +
+# Assuming dt_trend plot1 is a function that returns your data in data.table format
+dt <- dt_trend_plot2()
+
+# Create a subset with only the first points for each country
+dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
+first_points = dt[, .SD[which.min(year)], by = country_name]
+first_points = first_points[dt, on = .(country_name), nomatch = 0]
+
+
+# Initialize ggplot object
+tp1 <- ggplot(dt) +
   labs(
     title = paste(input$ineq_indicatorY_3_fig2, "over time"), 
     subtitle = "Selected countries", 
     x = "Year", 
-    y = input$ineq_indicatorY_3_fig2, 
-    color = "Country", 
-    shape = "Region"
-  )+
+    y = input$ineq_indicatorY_3_fig2
+  ) +
   theme_classic() +
-    theme(legend.position = "bottom")
+  theme(legend.position = "none")
 
- if(input$log_y_3_fig2 == TRUE){
-   
-     tp1 <- tp1  +
-    geom_point(
-      aes(x = year, y = log(IndicatorY), color = country_name), size = 2
-    ) + 
-    geom_line(aes(x = year, y = log(IndicatorY), color = country_name, group = comparable_spell), size = 1) 
-
-
- }else{
-  tp1 <- tp1  +
-    geom_point(
-      aes(x = year, y = IndicatorY, color = country_name), size = 2
-    ) + 
-    geom_line(aes(x = year, y = IndicatorY, color = country_name, group = comparable_spell), size = 1) 
+# Conditional logic for log transformation
+if(input$log_y_3_fig2 == TRUE){
+  transformation <- function(x) log(x)
+} else {
+  transformation <- function(x) x
 }
 
-  ggplotly(tp1)
+# Add geom_point and geom_line
+tp1 <- tp1 +
+  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 2) +
+  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
+
+# Add geom_text for labeling the first point for each country
+tp1 <- # Add geom_text for labeling the first point for each country
+tp1 <- tp1 +
+  geom_text(data = first_points, 
+            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
+            size = 3.5)
+
+# Render the ggplot object using ggplotly
+ggplotly(tp1)
+
 
 })
 
