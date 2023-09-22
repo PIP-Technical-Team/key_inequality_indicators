@@ -1,0 +1,18 @@
+---
+title: "Key Inequality Indicators"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: menu
+    theme: paper
+    source_code: embed
+    vertical_layout: scroll
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(pipr)
+```
+
+
+
