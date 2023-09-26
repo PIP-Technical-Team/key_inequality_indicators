@@ -40,6 +40,7 @@ dt_pip[
 dt_pip[, 
        gini:= gini*100]
 
+
 # Step 2: creating general objects ----
 pip_countries <- unique(dt_pip$country_name) # list of countries
 pip_countries_multiple_welfare_type <- 
@@ -330,6 +331,258 @@ create_data_imputed_by_countries_two_years <- function(
 
 
 
+Trends
+===========================================================
+
+
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r sidebar-plot-3}
+# Select Indicator
+selectInput("ineq_indicatorY_3_fig1", 
+            label = "Indicator on y-axis of Figure 1",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "MLD", 
+              "Gini", 
+              "Polarization", 
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Mean")
+
+# Select Indicator
+selectInput("ineq_indicatorY_3_fig2", 
+            label = "Indicator on y-axis of Figure 2",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "MLD", 
+              "Gini", 
+              "Polarization", 
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Gini")
+
+checkboxInput("log_y_3_fig1", 
+              label = "Log Y axis in Figure 1",  
+              value = FALSE)
+
+checkboxInput("log_y_3_fig2", 
+              label = "Log Y axis in Figure 2",  
+              value = FALSE)
+
+# Select region for scatter plot to highlight
+selectInput("countries_selected_3",
+            label    = "Select countries to highlight",
+            choices  = c(dt_pip$country_name |> unique() |> sort()),
+            selected = c("South Africa", "Colombia", "United States"),
+            multiple = TRUE)
+
+```
+
+
+
+```{r data-filter3}
+
+dt_trend_plot1 <- reactive({
+  
+  # Copy data table
+  dt_trend_plot <- copy(dt_pip)
+  
+  # rename
+ 
+  
+  # Filter for selected countries
+  dt_trend_plot <- dt_trend_plot[
+     country_name %chin% input$countries_selected_3
+  ]
+  
+  # Rename
+  setnames(
+    dt_trend_plot, 
+    old = tolower(input$ineq_indicatorY_3_fig1), 
+    new = "IndicatorY"
+  )
+  
+  
+  
+  
+})
+
+
+dt_trend_plot2 <- reactive({
+  
+  # Copy data table
+  dt_trend_plot <- copy(dt_pip)
+  
+  # rename
+ 
+  
+  # Filter for selected countries
+  dt_trend_plot <- dt_trend_plot[
+     country_name %chin% input$countries_selected_3
+  ]
+  
+  # Rename
+  setnames(
+    dt_trend_plot, 
+    old = tolower(input$ineq_indicatorY_3_fig2), 
+    new = "IndicatorY"
+  )
+  
+  
+  
+  
+})
+
+```
+
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Figure 1
+
+```{r plot3}
+
+renderPlotly({
+  
+# Assuming dt_trend plot1 is a function that returns your data in data.table format
+dt <- dt_trend_plot1()
+
+# Create a subset with only the first points for each country
+dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
+first_points = dt[, .SD[which.min(year)], by = country_name]
+first_points = first_points[dt, on = .(country_name), nomatch = 0]
+
+
+# Initialize ggplot object
+tp1 <- ggplot(dt) +
+  labs(
+    title = paste(input$ineq_indicatorY_3_fig1, "over time"), 
+    subtitle = "Selected countries", 
+    x = "Year", 
+    y = input$ineq_indicatorY_3_fig1
+  ) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+# Conditional logic for log transformation
+if(input$log_y_3_fig1 == TRUE){
+  transformation <- function(x) log(x)
+} else {
+  transformation <- function(x) x
+}
+
+# Add geom_point and geom_line
+tp1 <- tp1 +
+  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name), size = 2) +
+  geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
+
+# Add geom_text for labeling the first point for each country
+tp1 <- # Add geom_text for labeling the first point for each country
+tp1 <- tp1 +
+  geom_text(data = first_points, 
+            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
+            size = 3.5)
+
+dt_trend_plotly <- ggplotly(tp1)
+
+# Loop through traces to update hovertemplate
+for (i in 1:length(dt_trend_plotly$x$data)) {
+  dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
+    "Year: %{x}<br>",
+    input$ineq_indicatorY_3_fig1, ": %{y}<br>"#,
+    #"Country: %{text}"
+  )
+ # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
+}
+
+dt_trend_plotly
+
+
+})
+
+```
+
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Figure 2
+
+```{r plot3-2}
+
+renderPlotly({
+  
+# Assuming dt_trend plot1 is a function that returns your data in data.table format
+dt <- dt_trend_plot2()
+
+# Create a subset with only the first points for each country
+dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
+first_points = dt[, .SD[which.min(year)], by = country_name]
+first_points = first_points[dt, on = .(country_name), nomatch = 0]
+
+
+# Initialize ggplot object
+tp1 <- ggplot(dt) +
+  labs(
+    title = paste(input$ineq_indicatorY_3_fig2, "over time"), 
+    subtitle = "Selected countries", 
+    x = "Year", 
+    y = input$ineq_indicatorY_3_fig2
+  ) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+# Conditional logic for log transformation
+if(input$log_y_3_fig2 == TRUE){
+  transformation <- function(x) log(x)
+} else {
+  transformation <- function(x) x
+}
+
+# Add geom_point and geom_line
+tp1 <- tp1 +
+  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 2) +
+  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
+
+# Add geom_text for labeling the first point for each country
+tp1 <- # Add geom_text for labeling the first point for each country
+tp1 <- tp1 +
+  geom_text(data = first_points, 
+            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
+            size = 3.5)
+
+dt_trend_plotly <- ggplotly(tp1)
+
+# Loop through traces to update hovertemplate
+for (i in 1:length(dt_trend_plotly$x$data)) {
+  dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
+    "Year: %{x}<br>",
+    input$ineq_indicatorY_3_fig2, ": %{y}<br>"#,
+    #"Country: %{text}"
+  )
+ # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
+}
+
+dt_trend_plotly
+
+})
+
+```
+
+
+
+
+
 
 Change Over Time
 ===========================================================
@@ -345,7 +598,7 @@ selectInput("ineq_indicator",
             choices = c(
               "Mean", 
               "Median", 
-              "Mld", 
+              "MLD", 
               "Gini", 
               "Polarization", 
               "Top 10 Bottom 40 Ratio", 
@@ -521,7 +774,7 @@ selectInput("ineq_indicatorX",
             choices = c(
               "Mean", 
               "Median", 
-              "Mld", 
+              "MLD", 
               "Gini", 
               "Polarization", 
               "Top 10 Bottom 40 Ratio", 
@@ -534,7 +787,7 @@ selectInput("ineq_indicatorY",
             choices = c(
               "Mean", 
               "Median", 
-              "Mld", 
+              "MLD", 
               "Gini", 
               "Polarization", 
               "Top 10 Bottom 40 Ratio", 
@@ -554,7 +807,7 @@ selectInput("select_reporting_level",
 
 
 selectInput( "select_welfare_type", 
-              label = "Consumption or Income", 
+              label = "Survey Type:", 
               choices = c("Both", "Consumption", "Income"), 
               selected = "Both"
 )
@@ -843,258 +1096,6 @@ p(strong("Hint:", style = "black"), "Click on the region in the legend to remove
 
 
 
-Trends
-===========================================================
-
-
-
-Sidebar {.sidebar data-width=250}
------------------------------------------------------------------------
-
-```{r sidebar-plot-3}
-# Select Indicator
-selectInput("ineq_indicatorY_3_fig1", 
-            label = "Indicator on y-axis of Figure 1",
-            choices = c(
-              "Mean", 
-              "Median", 
-              "Mld", 
-              "Gini", 
-              "Polarization", 
-              "Top 10 Bottom 40 Ratio", 
-              "Top 20 Bottom 20 Ratio"
-            ),
-            selected = "Mean")
-
-# Select Indicator
-selectInput("ineq_indicatorY_3_fig2", 
-            label = "Indicator on y-axis of Figure 2",
-            choices = c(
-              "Mean", 
-              "Median", 
-              "Mld", 
-              "Gini", 
-              "Polarization", 
-              "Top 10 Bottom 40 Ratio", 
-              "Top 20 Bottom 20 Ratio"
-            ),
-            selected = "Gini")
-
-checkboxInput("log_y_3_fig1", 
-              label = "Log Y axis in Figure 1",  
-              value = FALSE)
-
-checkboxInput("log_y_3_fig2", 
-              label = "Log Y axis in Figure 2",  
-              value = FALSE)
-
-# Select region for scatter plot to highlight
-selectInput("countries_selected_3",
-            label    = "Select countries to highlight",
-            choices  = c(dt_pip$country_name |> unique() |> sort()),
-            selected = c("South Africa", "Colombia", "United States"),
-            multiple = TRUE)
-
-```
-
-
-
-```{r data-filter3}
-
-dt_trend_plot1 <- reactive({
-  
-  # Copy data table
-  dt_trend_plot <- copy(dt_pip)
-  
-  # rename
- 
-  
-  # Filter for selected countries
-  dt_trend_plot <- dt_trend_plot[
-     country_name %chin% input$countries_selected_3
-  ]
-  
-  # Rename
-  setnames(
-    dt_trend_plot, 
-    old = tolower(input$ineq_indicatorY_3_fig1), 
-    new = "IndicatorY"
-  )
-  
-  
-  
-  
-})
-
-
-dt_trend_plot2 <- reactive({
-  
-  # Copy data table
-  dt_trend_plot <- copy(dt_pip)
-  
-  # rename
- 
-  
-  # Filter for selected countries
-  dt_trend_plot <- dt_trend_plot[
-     country_name %chin% input$countries_selected_3
-  ]
-  
-  # Rename
-  setnames(
-    dt_trend_plot, 
-    old = tolower(input$ineq_indicatorY_3_fig2), 
-    new = "IndicatorY"
-  )
-  
-  
-  
-  
-})
-
-```
-
-
-Column {.tabset .tabset-fade}
------------------------------------------------------------------------
-
-### Figure 1
-
-```{r plot3}
-
-renderPlotly({
-  
-# Assuming dt_trend plot1 is a function that returns your data in data.table format
-dt <- dt_trend_plot1()
-
-# Create a subset with only the first points for each country
-dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
-first_points = dt[, .SD[which.min(year)], by = country_name]
-first_points = first_points[dt, on = .(country_name), nomatch = 0]
-
-
-# Initialize ggplot object
-tp1 <- ggplot(dt) +
-  labs(
-    title = paste(input$ineq_indicatorY_3_fig1, "over time"), 
-    subtitle = "Selected countries", 
-    x = "Year", 
-    y = input$ineq_indicatorY_3_fig1
-  ) +
-  theme_classic() +
-  theme(legend.position = "none")
-
-# Conditional logic for log transformation
-if(input$log_y_3_fig1 == TRUE){
-  transformation <- function(x) log(x)
-} else {
-  transformation <- function(x) x
-}
-
-# Add geom_point and geom_line
-tp1 <- tp1 +
-  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name), size = 2) +
-  geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
-  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
-
-# Add geom_text for labeling the first point for each country
-tp1 <- # Add geom_text for labeling the first point for each country
-tp1 <- tp1 +
-  geom_text(data = first_points, 
-            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
-            size = 3.5)
-
-dt_trend_plotly <- ggplotly(tp1)
-
-# Loop through traces to update hovertemplate
-for (i in 1:length(dt_trend_plotly$x$data)) {
-  dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
-    "Year: %{x}<br>",
-    input$ineq_indicatorY_3_fig1, ": %{y}<br>"#,
-    #"Country: %{text}"
-  )
- # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
-}
-
-dt_trend_plotly
-
-
-})
-
-```
-
-
-Column {.tabset .tabset-fade}
------------------------------------------------------------------------
-
-### Figure 2
-
-```{r plot3-2}
-
-renderPlotly({
-  
-# Assuming dt_trend plot1 is a function that returns your data in data.table format
-dt <- dt_trend_plot2()
-
-# Create a subset with only the first points for each country
-dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
-first_points = dt[, .SD[which.min(year)], by = country_name]
-first_points = first_points[dt, on = .(country_name), nomatch = 0]
-
-
-# Initialize ggplot object
-tp1 <- ggplot(dt) +
-  labs(
-    title = paste(input$ineq_indicatorY_3_fig2, "over time"), 
-    subtitle = "Selected countries", 
-    x = "Year", 
-    y = input$ineq_indicatorY_3_fig2
-  ) +
-  theme_classic() +
-  theme(legend.position = "none")
-
-# Conditional logic for log transformation
-if(input$log_y_3_fig2 == TRUE){
-  transformation <- function(x) log(x)
-} else {
-  transformation <- function(x) x
-}
-
-# Add geom_point and geom_line
-tp1 <- tp1 +
-  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 2) +
-  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
-  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
-
-# Add geom_text for labeling the first point for each country
-tp1 <- # Add geom_text for labeling the first point for each country
-tp1 <- tp1 +
-  geom_text(data = first_points, 
-            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
-            size = 3.5)
-
-dt_trend_plotly <- ggplotly(tp1)
-
-# Loop through traces to update hovertemplate
-for (i in 1:length(dt_trend_plotly$x$data)) {
-  dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
-    "Year: %{x}<br>",
-    input$ineq_indicatorY_3_fig2, ": %{y}<br>"#,
-    #"Country: %{text}"
-  )
- # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
-}
-
-dt_trend_plotly
-
-})
-
-```
-
-
-
-
-
 
 
 Table of Indicators
@@ -1220,7 +1221,7 @@ make_table_across_countries <- function(
     ineq_indicators  = c(
       "Mean",
       "Median",
-      "Mld",
+      "MLD",
       "Gini",
       "Decile1",
       "Decile2",
@@ -1327,6 +1328,14 @@ make_table_across_countries <- function(
     old = c("Welfare_type"), 
     new = c("Survey_type")
   )
+  if("Mld" %chin% names(dt)){
+    setnames(
+      dt, 
+      old = "Mld", 
+      new = "MLD"
+    )
+  }
+  
   dt # return
 } # end of make_table_across_countries()
 
@@ -1418,5 +1427,5 @@ output$downloadData <- downloadHandler(
 ```
 
 
-Source: this is the data source
+
 
