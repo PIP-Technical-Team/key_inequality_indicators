@@ -118,7 +118,6 @@ create_data_imputed_by_countries <- function(
   if(
     is.null(countries_selected) | 
     is.null(year)               | 
-    is.null(indicator)          | 
     is.null(indicator)
   ) stop ( "Must choose" )
   if(
@@ -129,7 +128,9 @@ create_data_imputed_by_countries <- function(
   # Use copy of dt
   dt_use <- copy( dt )
   
-  indicator <- indicator |> str_replace_all(" ", "_") |> str_to_lower()
+  indicator <- indicator |> 
+    str_replace_all(" ", "_") |> 
+    str_to_lower()
   
   # Rename 
   setnames(
@@ -257,7 +258,7 @@ create_data_imputed_by_countries_two_years <- function(
     window_length       = 2 
     
 ){
-  dt_use <- copy(dt_pip)
+  dt_use <- copy(dt)
   dt_use <- dt_use[, MeanWelfare := mean]
   # Data in Year 1
   dt1 <- create_data_imputed_by_countries(
@@ -376,10 +377,60 @@ checkboxInput("log_y_3_fig2",
 
 # Select region for scatter plot to highlight
 selectInput("countries_selected_3",
-            label    = "Select countries to highlight",
+            label    = "Select countries to plot",
             choices  = c(dt_pip$country_name |> unique() |> sort()),
             selected = c("South Africa", "Colombia", "United States"),
             multiple = TRUE)
+
+
+radioButtons("all_years_plot", 
+                   label = "Select years to plot",  
+                   choices = c(
+                     "All", 
+                     "Custom"
+                   ), 
+                   selected = c("All"))
+
+
+conditionalPanel(
+  condition = "input.all_years_plot == 'Custom'",
+  selectInput("select_initial_year_plot", 
+              label = "Initial Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                min(), 
+              multiple = FALSE)
+)
+
+conditionalPanel(
+  condition = "input.all_years_plot == 'Custom'",
+  selectInput("select_final_year_plot", 
+              label = "Final Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                max(), 
+              multiple = FALSE)
+)
+
+observeEvent(input$select_initial_year_plot, 
+             {
+               updated_choices <- dt_pip[
+                 year > as.numeric(input$select_initial_year_plot), 
+                 unique(year)
+               ]
+               updated_choices <- sort(updated_choices)
+               updateSelectInput(
+                 session, 
+                 "select_final_year_plot", 
+                 choices = updated_choices, 
+                 selected = dt_pip$year |> max() 
+               )
+})
+
 
 ```
 
@@ -390,7 +441,17 @@ selectInput("countries_selected_3",
 dt_trend_plot1 <- reactive({
   
   # Copy data table
-  dt_trend_plot <- copy(dt_pip)
+  dt_trend_plot1 <- copy(dt_pip)
+  
+  if(input$all_years_plot == "Custom"){
+    
+    dt_trend_plot1 <- dt_trend_plot1[
+      year >= input$select_initial_year_plot & 
+        year <= input$select_final_year_plot, 
+    ]
+    
+    
+  }
   
   # rename
   ineq_indicators <- input$ineq_indicatorY_3_fig1 |> 
@@ -401,17 +462,18 @@ dt_trend_plot1 <- reactive({
     )
   
   # Filter for selected countries
-  dt_trend_plot <- dt_trend_plot[
+  dt_trend_plot1 <- dt_trend_plot1[
      country_name %chin% input$countries_selected_3
   ]
   
   # Rename
   setnames(
-    dt_trend_plot, 
+    dt_trend_plot1, 
     old = ineq_indicators, 
     new = "IndicatorY"
   )
   
+  dt_trend_plot1
   
   
   
@@ -421,8 +483,16 @@ dt_trend_plot1 <- reactive({
 dt_trend_plot2 <- reactive({
   
   # Copy data table
-  dt_trend_plot <- copy(dt_pip)
-  
+  dt_trend_plot2 <- copy(dt_pip)
+  if(input$all_years_plot == "Custom"){
+    
+    dt_trend_plot2 <- dt_trend_plot2[
+      year >= input$select_initial_year_plot & 
+        year <= input$select_final_year_plot, 
+    ]
+    
+    
+  }
    # rename
   ineq_indicators <- input$ineq_indicatorY_3_fig2 |> 
     tolower() |> 
@@ -432,18 +502,19 @@ dt_trend_plot2 <- reactive({
     )
   
   # Filter for selected countries
-  dt_trend_plot <- dt_trend_plot[
+  dt_trend_plot2 <- dt_trend_plot2[
      country_name %chin% input$countries_selected_3
   ]
   
   # Rename
   setnames(
-    dt_trend_plot, 
+    dt_trend_plot2, 
     old = ineq_indicators, 
     new = "IndicatorY"
   )
   
-  
+  dt_trend_plot2
+
   
   
 })
@@ -454,7 +525,7 @@ dt_trend_plot2 <- reactive({
 Column {.tabset .tabset-fade}
 -----------------------------------------------------------------------
 
-### Figure 1
+### 
 
 ```{r plot3}
 
@@ -472,7 +543,7 @@ first_points = first_points[dt, on = .(country_name), nomatch = 0]
 # Initialize ggplot object
 tp1 <- ggplot(dt) +
   labs(
-    title = paste(input$ineq_indicatorY_3_fig1, "over time"), 
+    title = paste("Figure 1:", input$ineq_indicatorY_3_fig1, "over time"), 
     subtitle = "Selected countries", 
     x = "Year", 
     y = input$ineq_indicatorY_3_fig1
@@ -511,10 +582,9 @@ dt_trend_plotly <- ggplotly(tp1)
 for (i in 1:length(dt_trend_plotly$x$data)) {
   dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
     "Year: %{x}<br>",
-    input$ineq_indicatorY_3_fig1, ": %{y}<br>"#,
-    #"Country: %{text}"
+    input$ineq_indicatorY_3_fig1, ": %{y}<br>"
   )
- # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
+  
 }
 
 dt_trend_plotly
@@ -528,7 +598,7 @@ dt_trend_plotly
 Column {.tabset .tabset-fade}
 -----------------------------------------------------------------------
 
-### Figure 2
+### 
 
 ```{r plot3-2}
 
@@ -546,7 +616,7 @@ first_points = first_points[dt, on = .(country_name), nomatch = 0]
 # Initialize ggplot object
 tp1 <- ggplot(dt) +
   labs(
-    title = paste(input$ineq_indicatorY_3_fig2, "over time"), 
+    title = paste("Figure 2:", input$ineq_indicatorY_3_fig2, "over time"), 
     subtitle = "Selected countries", 
     x = "Year", 
     y = input$ineq_indicatorY_3_fig2
@@ -585,10 +655,9 @@ dt_trend_plotly <- ggplotly(tp1)
 for (i in 1:length(dt_trend_plotly$x$data)) {
   dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
     "Year: %{x}<br>",
-    input$ineq_indicatorY_3_fig2, ": %{y}<br>"#,
-    #"Country: %{text}"
+    input$ineq_indicatorY_3_fig2, ": %{y}<br>"
   )
- # dt_trend_plotly$x$data[[i]]$text <- dt_trend_plotly$x$data[[i]]$meta$country_name
+  
 }
 
 dt_trend_plotly
@@ -640,25 +709,62 @@ sliderInput("window",
              label = "Circa years window",
              min = 0, max = 5, value = 0, step = 1)
 
+selectInput(
+  "do_not_plot", 
+  label    = "Remove from plot", 
+  choices  = c(
+    pip_countries_regions$region_name |> 
+      sort() |> 
+      unique(), 
+    pip_countries |> 
+      sort() |> 
+      unique()
+  ), 
+  selected = NULL,
+  multiple = TRUE
+)
+
+# selectInput("countries_selected_3",
+#             label    = "Select countries to plot",
+#             choices  = c(dt_pip$country_name |> unique() |> sort()),
+#             selected = c("South Africa", "Colombia", "United States"),
+#             multiple = TRUE)
+
 ```
 
-Column {data-width=900 .tabset .tabset-fade}
+Column {data-width=1100 .tabset .tabset-fade}
 -----------------------------------------------------------------------
 
 ### 
 
+
+
 ```{r data-filter-1}
 dt_use <- reactive({
   
+  # Filter countries ----
+  deselected_countries <- c(
+    pip_countries_regions[
+      (country_name %chin% input$do_not_plot)
+    ]$country_name, 
+    pip_countries_regions[
+      (region_name %chin% input$do_not_plot)
+    ]$country_name
+  ) |> 
+    unique()
+  
+  dt_use <- dt_pip[
+    !(country_name %chin% deselected_countries)
+  ]
+  
   dt_use <- create_data_imputed_by_countries_two_years(
-    dt = dt_pip, 
+    dt = dt_use, 
     countries_selected  = pip_countries, 
     year1_selected      = as.numeric(input$initial_year), 
     year2_selected      = c(as.numeric(input$initial_year) + as.numeric(input$interval)),
     indicator           = input$ineq_indicator, 
     window_length       = input$window 
 )
-  
   
 })
 
@@ -671,41 +777,43 @@ dt1[
   , 
   MeanWelfare := round(MeanWelfare, 2)
 ]
-  p <- ggplot(
-    data = dt1,
-  ) +
-    geom_segment(
-       aes(
-         x     = Indicator1,
-         xend  = Indicator2,
-         y     = country_name,
-         yend  = country_name,
-         color = ChangeColor
-       ), 
-       arrow = arrow(length = unit(1.2, "mm"), type = "closed")
-    ) +
-  geom_point(aes(x = Indicator2, y = country_name, color = ChangeColor
-                 ), shape = 2, size = 0.8)+
-  geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor, 
-         size = MeanWelfare)) +
-  theme_classic()+
+# Initialize ggplot object
+p <- ggplot(data = dt1) +
+  theme_classic() +
   labs(
-    title = paste("Change in", input$ineq_indicator, "from", as.numeric(input$initial_year), "to", as.numeric(input$initial_year) + as.numeric(input$interval)),
+    title = paste("Change in", input$ineq_indicator, "from circa", as.numeric(input$initial_year), "to circa", as.numeric(input$initial_year) + as.numeric(input$interval)),
     subtitle = paste("Countries ordered from highest to lowest by initial", input$ineq_indicator),
     x = paste(input$ineq_indicator),
     y = ""
-  )+ 
-    theme(legend.position = "none")
+  ) + 
+  theme(legend.position = "none")
 
-  if(input$ineq_indicator %chin% c("Mean", "Median")){
-    
+# Add point layer first to avoid overlap
+p <- p +
+  geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor), size = 2)
+
+# Add segment layer with arrow
+p <- p +
+  geom_segment(
+    aes(
+      x     = Indicator1,
+      xend  = Indicator2,
+      y     = country_name,
+      yend  = country_name,
+      color = ChangeColor
+    ), 
+    arrow = arrow(length = unit(0.5, "inches"), type = "closed")
+  )
+
+# Conditional logic for color scales
+if(input$ineq_indicator %chin% c("Mean", "Median")){
   p <- p + 
     scale_color_manual(values = c("Negative" = "darkgreen", "Positive" = "red"))
-  } else{
-    p <- p + 
-      scale_color_manual(values = c("Negative" = "red", "Positive" = "darkgreen"))
-  }
-  
+} else {
+  p <- p + 
+    scale_color_manual(values = c("Negative" = "red", "Positive" = "darkgreen"))
+}
+
 
 # Convert to plotly object
 pp <- ggplotly(p)
@@ -749,7 +857,7 @@ Column {.tabset .tabset-fade}
 ```{r}
 #h3("Changes in chosen indicator over time")
 
-p("This plot shows the change in the selected indicator over time for countries where there is survey data in the chosen period. The", strong("dot", style = "color:black"), "provides two pieces of information. First, its x-axis position gives the initial indicator value for that country. Second, the dot's size provides the country's mean welfare level in the initial year.  The", strong("horizontal line segments", style = "color:black"), "connects the initial and final year indicator values. The", strong("color", style = "color:black"), "indicates whether a country's outcomes improve over the chosen interval - when mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has increased. The countries on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.")
+p("This plot shows the change in the selected indicator over time for countries where there is survey data in the chosen period. The", strong("dot", style = "color:black"), "provides two pieces of information. First, its x-axis position gives the initial indicator value for that country. Second, the dot's size provides the country's mean welfare level in the initial year.  The", strong("horizontal line segment", style = "color:black"), "connects the initial and final year indicator values. The", strong("color", style = "color:black"), "indicates whether a country's outcomes improve over the chosen interval - when mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has increased. The countries on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.")
 # 
 
 # 
@@ -766,17 +874,17 @@ p("This plot shows the change in the selected indicator over time for countries 
 
 h4("What if a country has no surveys in the chosen years?")
 
-p("Data might be missing for some countries for these specific years. The imputation procedure works as follows.")
+p("Data might be missing for some countries for these specific years. The imputation procedure works as follows:")
 p("1. Initial Year Imputation: If data for the initial year (e.g., 2000) is missing, the algorithm will first look for data in the subsequent year (2000 + 1 = 2001). If the 2001 data is also missing, it will then search in the previous year (2000 - 1 = 1999).")
-p("2. End Year: A similar process is applied for the end year (e.g., 2005 if the chosen interval length is 5). First, the algorithm looks for data in 2005 + 1 = 2006 and then 2005 - 1 = 2004 if data for 2005 is missing.")
-p("3. Circa years window: The imputation employs a user-defined parameter, the window length to limit the range of years considered for imputation. For example, if the chosen window is 2 then the imputation for the year 2000 will only consider data up to 2002 and down to 1998.")
-p("Note this means that if the chosen window is larger than zero, the change in the indicator does not necessarily to the chosen interval length.")
+p("2. End Year: A similar process is applied for the end year (e.g., 2005 if the chosen interval length is 5). If the data for 2005 is missing, first, the algorithm looks for data in 2005 + 1 = 2006, and then 2005 - 1 = 2004.")
+p("3. Circa years window: The imputation employs a user-defined parameter. The window length limits the range of years considered for imputation. For example, if the chosen window is 2, then the imputation for the year 2000 will only consider data up to 2002 and down to 1998.")
+p("Note: this means that if the chosen window is larger than zero, the plotted change in the selected indicator for a particular country may occur over a period longer than the chosen interval length.")
 
 
 
 ```
 
-Scatterplot of indicators
+Scatterplot of Indicators
 ===========================================================
 
 
@@ -814,12 +922,6 @@ checkboxInput("add_line",
               label = "Add line", 
               value = FALSE)
 
-selectInput("select_reporting_level", 
-              label = "Reporting Level", 
-              choices = c("All", "National", "Urban", "Rural"), 
-              selected = "All"
-)
-
 
 selectInput( "select_welfare_type", 
               label = "Survey Type:", 
@@ -836,15 +938,25 @@ checkboxGroupInput(
 
 
 
-selectInput("region_selected",
-            label    = "Select regions to highlight",
-            choices  = c("All", dt_pip$region_code |> unique() |> sort()),
+selectInput("countries_selected",
+            label    = "Select countries to highlight",
+            choices  = c(
+              "All", 
+              dt_pip$region_name |> 
+                unique() |> 
+                sort(), 
+              pip_countries
+            ),
             selected = "All",
             multiple = TRUE)
 # Select region for scatter plot to highlight
-selectInput("countries_selected",
-            label    = "Select countries to highlight",
-            choices  = c(dt_pip$country_name |> unique() |> sort()),
+selectInput("background_regions",
+            label    = "Select countries to compare to",
+            choices  = c(
+              "All", 
+              dt_pip$region_name |> 
+                unique()
+            ),
             selected = "",
             multiple = TRUE)
 
@@ -855,7 +967,7 @@ checkboxInput("plot_only_selected_countries",
 
 ```
 
-Column {data-width=1000 .tabset .tabset-fade}
+Column {data-width=1100 .tabset .tabset-fade}
 -----------------------------------------------------------------------
 
 ```{r data-filter2}
@@ -865,7 +977,7 @@ Column {data-width=1000 .tabset .tabset-fade}
 selected_countries <- reactive({
     
   # get list of selected countries
-  if(c("All") %chin% input$region_selected){
+  if(c("All") %chin% input$countries_selected){
     
     selected_countries <- dt_pip$country_name |> unique()
     
@@ -873,20 +985,11 @@ selected_countries <- reactive({
     
     selected_countries <- c(
     (pip_countries_regions[country_name %chin% input$countries_selected])$country_name, 
-    (pip_countries_regions[region_code %chin% input$region_selected])$country_name
+    (pip_countries_regions[region_name %chin% input$countries_selected])$country_name
   ) |> unique()
     
   }
   
-  # reporting level
-  if(!input$select_reporting_level == c("All")){
-    selected_countries <- intersect(
-      selected_countries, 
-      dt_pip[reporting_level == tolower(input$select_reporting_level)]$country_name
-    ) |> unique()
-  }else {
-    selected_countries
-  }
   
     # welfare
   if(!input$select_welfare_type == c("Both")){
@@ -907,6 +1010,32 @@ dt_use_sp <- reactive({
   # Copy pip stats
   dt_use_sp <- copy(dt_pip)
   
+  # Keep selected and background countries
+  if(
+    ! any(
+      c(
+        "All" %chin% input$countries_selected, 
+        "All" %chin% input$background_regions
+      )
+    )
+  ){
+    
+    # which countries to keep in data
+    countries_filtered <- c(
+      selected_countries(), 
+      pip_countries_regions[
+        region_name %chin% input$background_regions
+      ]$country_name
+    )
+    
+    # filter
+    dt_use_sp <- dt_use_sp[
+      country_name %chin% countries_filtered
+    ]
+    
+    
+  }
+  
   # Change names of selected indicators
   
   ineq_indic_X <- input$ineq_indicatorX |> str_replace_all(" ", "_") |> str_to_lower()
@@ -923,13 +1052,13 @@ dt_use_sp <- reactive({
     Region := region_code
   ]
   
-  # Filter
-  if(input$plot_only_selected_countries == TRUE){
-      filter_countries <- selected_countries()
-  dt_use_sp[country_name %chin% filter_countries]
-  
-    
-  }else{dt_use_sp}
+  # # Filter
+  # if(input$plot_only_selected_countries == TRUE){
+  #     filter_countries <- selected_countries()
+  # dt_use_sp[country_name %chin% filter_countries]
+  # 
+  #   
+  # }else{dt_use_sp}
 
 
     })
@@ -1070,7 +1199,7 @@ transformation_y <- function(x){
 # Initialize ggplot object
 sp1 <- ggplot(dt_use_sp()) +
   labs(
-    title = paste("Scatterplot of relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
+    title = paste("Relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
     x = input$ineq_indicatorX,
     y = input$ineq_indicatorY, 
     color = "Region"
@@ -1111,8 +1240,7 @@ sp1 <- sp1 + theme_classic()
   }
 
   
-  if(input$plot_only_selected_countries == FALSE){
-    
+  
   # Highlight countries
   sp1 <- sp1 + 
     gghighlight(
@@ -1120,7 +1248,6 @@ sp1 <- sp1 + theme_classic()
       unhighlighted_params = list(color = "lightgrey")
     )
     
-  }
 
   sp1 <- sp1 +
   theme_classic() +
