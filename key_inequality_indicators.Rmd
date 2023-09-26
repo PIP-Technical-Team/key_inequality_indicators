@@ -10,6 +10,11 @@ output:
 runtime: shiny
 ---
 
+```{r}
+htmltools::includeHTML("custom_header.html")
+```
+
+
 ```{r setup-packages, include=FALSE}
 library("here")
 library("data.table")
@@ -329,6 +334,21 @@ create_data_imputed_by_countries_two_years <- function(
 
 
 ```
+
+
+About and Definitions
+===========================================================
+
+Column {data-width=900}
+-----------------------------------------------------------------------
+
+### About
+
+this is the about section
+
+### Definitions
+
+some definitions
 
 
 
