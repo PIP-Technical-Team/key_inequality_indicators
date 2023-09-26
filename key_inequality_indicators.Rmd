@@ -1,5 +1,5 @@
 ---
-title: "Key Inequality Indicators"
+title: " PIP Key Inequality Indicators"
 output: 
   flexdashboard::flex_dashboard:
     orientation: columns
@@ -61,9 +61,15 @@ pip_countries_regions <-
   unique(dt_pip, 
          by = c("country_name", "region_code")
          )[, 
-           .(country_name, region_code)
+           .(country_name, region_code, region_name)
            ]
-
+region_matching <- unique(
+  dt_pip[
+    ,
+    .(region_name), 
+    by = region_code
+  ]
+)
 # Exclude double rows
 dt_pip <- 
   dt_pip[, 
@@ -325,267 +331,6 @@ create_data_imputed_by_countries_two_years <- function(
 
 
 
-
-Table of Indicators
-===========================================================
-
-
-Sidebar {.sidebar data-width=250}
------------------------------------------------------------------------
-
-```{r sidebar-table-1}
-
-# Select Indicator
-checkboxGroupInput("ineq_indicator_table", 
-            label = "Indicators:",
-            choices = c(
-              "Mean", 
-              "Median", 
-              "Mld", 
-              "Gini", 
-              "Polarization", 
-              "Top 10 Bottom 40 Ratio", 
-              "Top 20 Bottom 20 Ratio"
-            ),
-            selected = c("Mean", 
-              "Median", 
-              "Mld", 
-              "Gini", 
-              "Polarization", 
-              "Top 10 Bottom 40 Ratio", 
-              "Top 20 Bottom 20 Ratio"))
-
-# radioButtons("tick_all_countries_table", 
-#               label = "Select countries", 
-#               choices = c("All Countries", "Make Selection Below"), 
-#               selected = c("All Countries")
-# )
-
-
-selectInput("select_countries_table", 
-            label = "Countries:",
-            choices = c("All", pip_countries),
-            selected = c("All"), 
-            multiple = TRUE)
-
-selectInput("regions_table", 
-            label = "Regions:",
-            choices = dt_pip$region_code |> unique(),
-            selected = "", 
-            multiple = TRUE)
-
-radioButtons("all_years_table", 
-                   label = "Years shown in table",  
-                   choices = c("Latest", "All"), 
-                   selected = c("All"))
-
-# Render download button
-#downloadButton("downloadData", "Download CSV")
-downloadLink(
-  outputId = "downloadData", 
-  label = "Download as csv"
-)
-
-
-```
-
-
-Row {.tabset .tabset-fade}
------------------------------------------------------------------------
-
-
-
-```{r plot-table}
-
-
-make_table_across_countries <- function(
-    dt,
-    country_name_vec = c("Angola", "South Africa"),
-    ineq_indicators  = c(
-      "Mean",
-      "Median",
-      "Mld",
-      "Gini",
-      "Decile1",
-      "Decile2",
-      "Decile3",
-      "Decile4",
-      "Decile5",
-      "Decile6",
-      "Decile7",
-      "Decile8",
-      "Decile9",
-      "Decile10",
-      "Top_10_bottom_40_ratio",
-      "Top_20_bottom_20_ratio"
-    ),
-    years_selected = c("All", "Latest")
-){
-  dt <- copy(dt)
-  # Check Inputs ----
-  stopifnot(is.data.table(dt))
-  stopifnot(country_name_vec %chin% pip_countries)
-  years_selected <- match.arg(years_selected)
-  # if(!ineq_indicators %in% c(
-  #   "Mean",
-  #   "Median",
-  #   "Mld",
-  #   "Gini",
-  #   "Polarization",
-  #   "Decile1",
-  #   "Decile2",
-  #   "Decile3",
-  #   "Decile4",
-  #   "Decile5",
-  #   "Decile6",
-  #   "Decile7",
-  #   "Decile8",
-  #   "Decile9",
-  #   "Decile10",
-  #   "Top10_bottom40",
-  #   "Top20_bottom20"
-  # ) |> all()) stop("Select appropriate inequality indicators")
-  
-  #dt <- dt[, if (.N > 1) .SD[reporting_level == "national"] else .SD, by = .(country_name, year)]
-  
-  # Prepare Data ----
-  selected_cols <- c(
-    "Country",
-    "Region",
-    "Year",
-    "Reporting_level",
-    "Welfare_type",
-    ineq_indicators
-  )
-  selected_cols <- 
-    selected_cols |> 
-    str_replace_all(" ", "_") |> 
-    str_to_lower() |> 
-    str_to_title()
-  
-  setnames(
-    dt,
-    old = c("country_name", "region_code"),
-    new = c("country", "region")                           # Clean variable names
-  )
-  setnames(
-    dt,
-    stringr::str_to_title(names(dt))             # Capitalize column names
-  )
-  
-  
-  dt <- dt[
-    Country %chin% country_name_vec,         # filter by country
-    ..selected_cols                             # Select id vars and inequality indicators
-  ]
-  
-  dt[
-    ,
-    (names(dt)) := lapply(                       # Round to 2 decimals
-      .SD,
-      \(x){
-        if (is.numeric(x)) 
-          round(x, 2) 
-        else 
-          x
-        }
-    )
-  ]
-  
-  
-  
-  if(years_selected == "Latest"){
-    dt <- dt[, 
-             .SD[which.max(Year)], 
-             by = Country]
-  }
-  
-  
-  setorder(dt, Country, Region, -Year, Reporting_level, Welfare_type)
-  
-  setnames(
-    dt, 
-    old = c("Welfare_type"), 
-    new = c("Consumption_or_Income")
-  )
-  dt # return
-} # end of make_table_across_countries()
-
-
-
-table <-
-  reactive({
-    # Filter countries
-    
-    ct <- 
-      if ("All" %chin% input$select_countries_table) {
-      pip_countries
-    } else {
-      c(input$select_countries_table,
-        pip_countries_regions[region_code %chin%
-                                input$regions_table]$country_name
-        ) |>
-        unique()
-    }
-    
-    make_table_across_countries(
-      dt               = dt_pip,
-      country_name_vec = ct,
-      ineq_indicators  = input$ineq_indicator_table,
-      years_selected   = input$all_years_table
-  )
-})
-
-  
-
-renderPlotly({
-  
-list_of_columns <- lapply(
-    names(table()), 
-    \(col_name) { # Make the columns list items for plotly
-      return(table()[[col_name]])
-    })
-  
-  # plot table
-  plot_ly(
-    type = 'table',
-    #columnwidth = c(100, 100),
-    header = list(
-      values = table() |> 
-        colnames() |> 
-        # column names vector
-        str_replace_all(pattern = "_", 
-                        replacement = " "), 
-      align = c("center", "center"),
-      line = list(width = 1, color = 'black'),
-      fill = list(color = c("grey", "grey")),
-      font = list(family = "Arial", size = 14, color = "white")
-    ),
-    cells = list(
-      values = list_of_columns,
-      align  = c("center", "center"),
-      line   = list(color = "black", width = 1),
-      font   = list(family = "Arial", size = 12, color = c("black"))
-    ))
-})
-
-
-
-output$downloadData <- downloadHandler(
-  filename = function() {
-    paste("PIP-key-ineq-indicators_", Sys.Date(), ".csv", sep = "")
-  },
-  content = function(file) {
-    write.csv(table(), file)
-  }
-)
-
-
-
-```
-
-
-
 Change Over Time
 ===========================================================
 
@@ -613,8 +358,6 @@ selectInput("initial_year",
             choices  = dt_pip$year |> unique() |> sort(),
             selected = 1998,
             multiple = FALSE)
-
-
 
 
 # Select initial year
@@ -1347,4 +1090,333 @@ dt_trend_plotly
 })
 
 ```
+
+
+
+
+
+
+
+Table of Indicators
+===========================================================
+
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r sidebar-table-1}
+
+# Select Indicator
+checkboxGroupInput("ineq_indicator_table", 
+            label = "Indicators:",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "Gini",
+              "MLD",
+              "Decile Shares",
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected =  c(
+              "Mean", 
+              "Gini",
+              "Top 10 Bottom 40 Ratio"
+            ))
+
+
+selectInput("select_countries_table", 
+            label = "Countries:",
+            choices = c(
+              "All", 
+              dt_pip$region_name |> 
+                unique() |> 
+                sort(),  
+              pip_countries
+            ),
+            selected = c("All"), 
+            multiple = TRUE)
+
+# selectInput("regions_table", 
+#             label = "Regions:",
+#             choices = dt_pip$region_code |> unique(),
+#             selected = "", 
+#             multiple = TRUE)
+
+radioButtons("all_years_table", 
+                   label = "Years shown in table",  
+                   choices = c(
+                     "Latest", 
+                     "All", 
+                     "Custom"
+                   ), 
+                   selected = c("Latest"))
+
+
+conditionalPanel(
+  condition = "input.all_years_table == 'Custom'",
+  selectInput("select_initial_year_table", 
+              label = "Initial Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                min(), 
+              multiple = FALSE)
+)
+
+conditionalPanel(
+  condition = "input.all_years_table == 'Custom' && input.select_initial_year_table != null",
+  selectInput("select_final_year_table", 
+              label = "Final Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                max(), 
+              multiple = FALSE)
+)
+
+observeEvent(input$select_initial_year_table, 
+             {
+               updated_choices <- dt_pip[
+                 year > as.numeric(input$select_initial_year_table), 
+                 unique(year)
+               ]
+               updated_choices <- sort(updated_choices)
+               updateSelectInput(
+                 session, 
+                 "select_final_year_table", 
+                 choices = updated_choices, 
+                 selected = dt_pip$year |> max() 
+               )
+})
+
+
+# Render download button
+#downloadButton("downloadData", "Download CSV")
+downloadLink(
+  outputId = "downloadData", 
+  label = "Download as csv"
+)
+
+
+```
+
+
+
+
+Row {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### 
+
+```{r plot-table}
+
+
+make_table_across_countries <- function(
+    dt,
+    country_name_vec = c("Angola", "South Africa"),
+    ineq_indicators  = c(
+      "Mean",
+      "Median",
+      "Mld",
+      "Gini",
+      "Decile1",
+      "Decile2",
+      "Decile3",
+      "Decile4",
+      "Decile5",
+      "Decile6",
+      "Decile7",
+      "Decile8",
+      "Decile9",
+      "Decile10",
+      "Top_10_bottom_40_ratio",
+      "Top_20_bottom_20_ratio"
+    ),
+    years_selected = c("All", "Latest", "Custom"), 
+    start_year = NULL, 
+    end_year = NULL
+){
+  dt <- copy(dt)
+  # Check Inputs ----
+  stopifnot(is.data.table(dt))
+  stopifnot(country_name_vec %chin% pip_countries)
+  years_selected <- match.arg(years_selected)
+
+  # If decile shares is selected
+  if(c("Decile Shares") %chin% ineq_indicators ){
+    # remove "Decile Shares" element
+    ineq_indicators <- ineq_indicators[!c("Decile Shares") %chin% ineq_indicators]
+    # add all individual decile shares
+    ineq_indicators <- c(
+      ineq_indicators, 
+      paste0("decile", 1:10)
+    )
+  }
+  
+  # Prepare Data ----
+  selected_cols <- c(
+    "Country",
+    "Region",
+    #"Region_code",
+    "Year",
+    "Reporting_level",
+    "Welfare_type",
+    ineq_indicators
+  )
+  selected_cols <- 
+    selected_cols |> 
+    str_replace_all(" ", "_") |> 
+    str_to_lower() |> 
+    str_to_title()
+  
+  setnames(
+    dt,
+    old = c("country_name", "region_name"),
+    new = c("country", "region")                           # Clean variable names
+  )
+  setnames(
+    dt,
+    stringr::str_to_title(names(dt))             # Capitalize column names
+  )
+  
+  
+  dt <- dt[
+    Country %chin% country_name_vec,         # filter by country
+    ..selected_cols                             # Select id vars and inequality indicators
+  ]
+  
+  dt[
+    ,
+    (names(dt)) := lapply(                       # Round to 2 decimals
+      .SD,
+      \(x){
+        if (is.numeric(x)) 
+          round(x, 2) 
+        else 
+          x
+        }
+    )
+  ]
+  
+  
+  # Filter years
+  if(years_selected == "Latest"){
+    dt <- dt[, 
+             .SD[which.max(Year)], 
+             by = Country]
+  }
+  if(years_selected == "Custom"){
+
+    if(start_year > end_year)
+      stop("Please note the initial year must be lower than the final year")
+    dt <- dt[
+      Year >= start_year &
+        Year <= end_year
+    ]
+
+  }
+  
+  
+  setorder(dt, Country, Region, -Year, Reporting_level, Welfare_type)
+  
+  setnames(
+    dt, 
+    old = c("Welfare_type"), 
+    new = c("Survey_type")
+  )
+  dt # return
+} # end of make_table_across_countries()
+
+
+
+table <-
+  reactive({
+    
+    # Filter countries
+    
+    ct <- 
+      if ("All" %chin% input$select_countries_table) {
+      pip_countries
+    } else {
+      c(pip_countries_regions[country_name %chin%
+                                input$select_countries_table]$country_name,
+        pip_countries_regions[region_name %chin%
+                                input$select_countries_table]$country_name
+        ) |>
+        unique()
+    }
+    
+    make_table_across_countries(
+      dt               = dt_pip,
+      country_name_vec = ct,
+      ineq_indicators  = input$ineq_indicator_table,
+      years_selected   = input$all_years_table, 
+      start_year       = input$select_initial_year_table, 
+      end_year         = input$select_final_year_table
+  )
+})
+
+  
+
+renderPlotly({
+  
+list_of_columns <- lapply(
+    names(table()), 
+    \(col_name) { # Make the columns list items for plotly
+      return(table()[[col_name]])
+    })
+  
+  # plot table
+  t <- plot_ly(
+    type = 'table',
+    #columnwidth = c(100, 100),
+    header = list(
+      values = table() |> 
+        colnames() |> 
+        # column names vector
+        str_replace_all(pattern = "_", 
+                        replacement = " "), 
+      align = "center",
+      line = list(width = 1, color = 'black'),
+      fill = list(color = c("grey", "grey")),
+      font = list(family = "Arial", size = 14, color = "white")
+    ),
+    cells = list(
+      values = list_of_columns,
+      align  = c("center", "center"),
+      line   = list(color = "black", width = 1),
+      font   = list(family = "Arial", size = 12, color = c("black"))
+    ))
+  
+t <- layout(
+  t,
+  title   = "PIP Key Inequality Indicators, Selected Country and Years",
+  titlefont = list(color = 'black'), 
+  title_x = 0 
+)
+  
+  t
+  
+})
+
+
+
+output$downloadData <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators_", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(table(), file)
+  }
+)
+
+
+
+```
+
+
+Source: this is the data source
 
