@@ -918,10 +918,6 @@ selectInput("ineq_indicatorY",
             ),
             selected = "Mean")
 
-checkboxInput("add_line", 
-              label = "Add line", 
-              value = FALSE)
-
 
 selectInput( "select_welfare_type", 
               label = "Survey Type:", 
@@ -932,7 +928,7 @@ selectInput( "select_welfare_type",
 checkboxGroupInput(
   inputId  = "log_transformations", 
   label    = "Log Transformations:", 
-  choices  = c("X axis", "Y axis"), 
+  choices  = c("Y axis", "X axis"), 
   selected = NULL
 )
 
@@ -960,10 +956,61 @@ selectInput("background_regions",
             selected = "",
             multiple = TRUE)
 
-checkboxInput("plot_only_selected_countries",
-              label = "Plot only selected countries/regions", 
-              value = TRUE
+
+radioButtons("all_years_scatterplot", 
+                   label = "Select years to plot",  
+                   choices = c(
+                     "All", 
+                     "Custom"
+                   ), 
+                   selected = c("All"))
+
+conditionalPanel(
+  condition = "input.all_years_scatterplot == 'Custom'",
+  selectInput("select_initial_year_scatterplot", 
+              label = "Initial Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                min(), 
+              multiple = FALSE)
 )
+
+conditionalPanel(
+  condition = "input.all_years_scatterplot == 'Custom'",
+  selectInput("select_final_year_scatterplot", 
+              label = "Final Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                max(), 
+              multiple = FALSE)
+)
+
+observeEvent(input$select_initial_year_scatterplot, 
+             {
+               updated_choices <- dt_pip[
+                 year > as.numeric(input$select_initial_year_scatterplot), 
+                 unique(year)
+               ]
+               updated_choices <- sort(updated_choices)
+               updateSelectInput(
+                 session, 
+                 "select_final_year_scatterplot", 
+                 choices = updated_choices, 
+                 selected = dt_pip$year |> max() 
+               )
+})
+
+```
+Advanced Feature
+```{r}
+checkboxInput("add_line", 
+              label = "Add line", 
+              value = FALSE)
+
 
 ```
 
@@ -1009,6 +1056,17 @@ dt_use_sp <- reactive({
   
   # Copy pip stats
   dt_use_sp <- copy(dt_pip)
+  
+  # filter years
+  if(input$all_years_scatterplot == "Custom"){
+    
+    dt_use_sp <- dt_use_sp[
+      year >= input$select_initial_year_scatterplot & 
+        year <= input$select_final_year_scatterplot
+    ]
+    
+  }
+  
   
   # Keep selected and background countries
   if(
