@@ -489,7 +489,7 @@ if(input$log_y_3_fig1 == TRUE){
 
 # Add geom_point and geom_line
 tp1 <- tp1 +
-  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name), size = 2) +
+  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name), size = 3) +
   geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
   scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
 
@@ -499,6 +499,11 @@ tp1 <- tp1 +
   geom_text(data = first_points, 
             aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
             size = 3.5)
+
+if(input$log_y_3_fig1 == TRUE){
+  tp1 <- tp1 +
+  scale_y_log10(labels = function(x) round(exp(x), 0))
+}
 
 dt_trend_plotly <- ggplotly(tp1)
 
@@ -558,7 +563,7 @@ if(input$log_y_3_fig2 == TRUE){
 
 # Add geom_point and geom_line
 tp1 <- tp1 +
-  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 2) +
+  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 3) +
   geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
   scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
 
@@ -568,6 +573,11 @@ tp1 <- tp1 +
   geom_text(data = first_points, 
             aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
             size = 3.5)
+
+if(input$log_y_3_fig2 == TRUE){
+  tp1 <- tp1 +
+  scale_y_log10(labels = function(x) round(exp(x), 0))
+}
 
 dt_trend_plotly <- ggplotly(tp1)
 
@@ -932,113 +942,175 @@ dt_use_sp <- reactive({
 ```{r plot2}
 
 renderPlotly({
+# 
+#   sp1 <- ggplot(dt_use_sp()) +
+#   labs(
+#     title = paste("Scatterplot of relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
+#     x = input$ineq_indicatorX,
+#     y = input$ineq_indicatorY, 
+#     color = "Region"
+#   )
+#   
+#   # Log the axes
+#   if(
+#     c("Y axis") %chin% input$log_transformations & 
+#     c("X axis") %chin% input$log_transformations
+#   ){
+#    sp1 <- sp1 +
+#           geom_point(aes(
+#       x = log(IndicatorX),
+#       y = log(IndicatorY),
+#       color = Region
+#     ))
+#    
+#     # add line
+#     if(input$add_line == TRUE){
+#         sp1 <- sp1 +
+#           geom_smooth(
+#             aes(
+#       x = log(IndicatorX),
+#       y = log(IndicatorY),
+#       stat = "smooth",
+#       position = "identity"
+#             )
+#           )
+#   }
+# 
+#     }
+# 
+#   if(
+#     (c("Y axis") %chin% input$log_transformations) & 
+#     !(c("X axis") %chin% input$log_transformations)
+#   ){
+#     sp1 <- sp1 +
+#           geom_point(aes(
+#       x = IndicatorX,
+#       y = log(IndicatorY),
+#       color = Region
+#     ))    
+#     # add line
+#     if(input$add_line == TRUE){
+#         sp1 <- sp1 +
+#           geom_smooth(
+#             aes(
+#       x = IndicatorX,
+#       y = log(IndicatorY),
+#       stat = "smooth",
+#       position = "identity"
+#             )
+#           )
+#   }
+# 
+#   }
+#   if(
+#     !(c("Y axis") %chin% input$log_transformations) & 
+#     (c("X axis") %chin% input$log_transformations)
+#   ){
+#     sp1 <- sp1 +
+#           geom_point(aes(
+#       x = log(IndicatorX),
+#       y = IndicatorY,
+#       color = Region
+#     ))    # add line
+#     if(input$add_line == TRUE){
+#         sp1 <- sp1 +
+#           geom_smooth(
+#             aes(
+#       x = log(IndicatorX),
+#       y = IndicatorY,
+#       stat = "smooth",
+#       position = "identity"
+#             )
+#           )
+#   }
+# 
+#   }
+#   if(
+#     !(c("Y axis") %chin% input$log_transformations) & 
+#     !(c("X axis") %chin% input$log_transformations)
+#   ){
+#     sp1 <- sp1 +
+#           geom_point(aes(
+#       x = IndicatorX,
+#       y = IndicatorY,
+#       color = Region
+#     ))    # add line
+#     if(input$add_line == TRUE){
+#         sp1 <- sp1 +
+#           geom_smooth(
+#             aes(
+#       x = IndicatorX,
+#       y = IndicatorY,
+#       stat = "smooth",
+#       position = "identity"
+#             )
+#           )
+#   }
+# 
+#   }
+  
+transformation_x <- function(x){
+  
+  if("X axis" %chin% input$log_transformations){
+    log(x)
+  } else{
+    x
+  }
+}
 
-  sp1 <- ggplot(dt_use_sp()) +
+transformation_y <- function(x){
+  
+  if("Y axis" %chin% input$log_transformations){
+    log(x)
+  } else{
+    x
+  }
+}
+
+# Initialize ggplot object
+sp1 <- ggplot(dt_use_sp()) +
   labs(
     title = paste("Scatterplot of relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
     x = input$ineq_indicatorX,
     y = input$ineq_indicatorY, 
     color = "Region"
   )
+
+# Add geom_point
+sp1 <- sp1 +
+  geom_point(aes(
+    x = transformation_x(IndicatorX),
+    y = transformation_y(IndicatorY),
+    color = Region
+  ))
+
+# Add geom_smooth if required
+if (input$add_line == TRUE) {
+  sp1 <- sp1 +
+    geom_smooth(
+      aes(
+        x = transformation_x(IndicatorX),
+        y = transformation_y(IndicatorY),
+        stat = "smooth",
+        position = "identity"
+      )
+    )
+}
+
+# Adjust theme
+sp1 <- sp1 + theme_classic()
   
-  # Log the axes
-  if(
-    c("Y axis") %chin% input$log_transformations & 
-    c("X axis") %chin% input$log_transformations
-  ){
-   sp1 <- sp1 +
-          geom_point(aes(
-      x = log(IndicatorX),
-      y = log(IndicatorY),
-      color = Region
-    ))  
-   
-    # add line
-    if(input$add_line == TRUE){
-        sp1 <- sp1 +
-          geom_smooth(
-            aes(
-      x = log(IndicatorX),
-      y = log(IndicatorY),
-      stat = "smooth",
-      position = "identity"
-            )
-          )
-  }
-
-    }
-
-  if(
-    (c("Y axis") %chin% input$log_transformations) & 
-    !(c("X axis") %chin% input$log_transformations)
-  ){
+# if log transform, use original units
+  if(c("X axis" %chin% input$log_transformations)){
     sp1 <- sp1 +
-          geom_point(aes(
-      x = IndicatorX,
-      y = log(IndicatorY),
-      color = Region
-    ))    
-    # add line
-    if(input$add_line == TRUE){
-        sp1 <- sp1 +
-          geom_smooth(
-            aes(
-      x = IndicatorX,
-      y = log(IndicatorY),
-      stat = "smooth",
-      position = "identity"
-            )
-          )
+  scale_x_log10(labels = function(x) round(exp(x), 0))
   }
-
-  }
-  if(
-    !(c("Y axis") %chin% input$log_transformations) & 
-    (c("X axis") %chin% input$log_transformations)
-  ){
+  if(c("Y axis" %chin% input$log_transformations)){
     sp1 <- sp1 +
-          geom_point(aes(
-      x = log(IndicatorX),
-      y = IndicatorY,
-      color = Region
-    ))    # add line
-    if(input$add_line == TRUE){
-        sp1 <- sp1 +
-          geom_smooth(
-            aes(
-      x = log(IndicatorX),
-      y = IndicatorY,
-      stat = "smooth",
-      position = "identity"
-            )
-          )
+  scale_y_log10(labels = function(x) round(exp(x), 0))
   }
 
-  }
-  if(
-    !(c("Y axis") %chin% input$log_transformations) & 
-    !(c("X axis") %chin% input$log_transformations)
-  ){
-    sp1 <- sp1 +
-          geom_point(aes(
-      x = IndicatorX,
-      y = IndicatorY,
-      color = Region
-    ))    # add line
-    if(input$add_line == TRUE){
-        sp1 <- sp1 +
-          geom_smooth(
-            aes(
-      x = IndicatorX,
-      y = IndicatorY,
-      stat = "smooth",
-      position = "identity"
-            )
-          )
-  }
-
-  }
-
+  
   if(input$plot_only_selected_countries == FALSE){
     
   # Highlight countries
