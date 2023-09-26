@@ -348,7 +348,6 @@ selectInput("ineq_indicatorY_3_fig1",
               "Median", 
               "MLD", 
               "Gini", 
-              "Polarization", 
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
@@ -362,7 +361,6 @@ selectInput("ineq_indicatorY_3_fig2",
               "Median", 
               "MLD", 
               "Gini", 
-              "Polarization", 
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
@@ -395,7 +393,12 @@ dt_trend_plot1 <- reactive({
   dt_trend_plot <- copy(dt_pip)
   
   # rename
- 
+  ineq_indicators <- input$ineq_indicatorY_3_fig1 |> 
+    tolower() |> 
+    str_replace_all(
+      pattern = " ", 
+      replacement = "_"
+    )
   
   # Filter for selected countries
   dt_trend_plot <- dt_trend_plot[
@@ -405,7 +408,7 @@ dt_trend_plot1 <- reactive({
   # Rename
   setnames(
     dt_trend_plot, 
-    old = tolower(input$ineq_indicatorY_3_fig1), 
+    old = ineq_indicators, 
     new = "IndicatorY"
   )
   
@@ -420,8 +423,13 @@ dt_trend_plot2 <- reactive({
   # Copy data table
   dt_trend_plot <- copy(dt_pip)
   
-  # rename
- 
+   # rename
+  ineq_indicators <- input$ineq_indicatorY_3_fig2 |> 
+    tolower() |> 
+    str_replace_all(
+      pattern = " ", 
+      replacement = "_"
+    )
   
   # Filter for selected countries
   dt_trend_plot <- dt_trend_plot[
@@ -431,7 +439,7 @@ dt_trend_plot2 <- reactive({
   # Rename
   setnames(
     dt_trend_plot, 
-    old = tolower(input$ineq_indicatorY_3_fig2), 
+    old = ineq_indicators, 
     new = "IndicatorY"
   )
   
@@ -600,7 +608,6 @@ selectInput("ineq_indicator",
               "Median", 
               "MLD", 
               "Gini", 
-              "Polarization", 
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
@@ -776,7 +783,6 @@ selectInput("ineq_indicatorX",
               "Median", 
               "MLD", 
               "Gini", 
-              "Polarization", 
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
@@ -789,7 +795,6 @@ selectInput("ineq_indicatorY",
               "Median", 
               "MLD", 
               "Gini", 
-              "Polarization", 
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
