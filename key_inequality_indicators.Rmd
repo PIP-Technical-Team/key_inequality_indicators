@@ -108,6 +108,41 @@ dt_pip <-
 
 ```{r load-data-functions}
 
+
+
+title_function <- function(ind){
+  
+  title_lookup <- c("Mean", 
+                    "Median", 
+                    "Gini", 
+                    "MLD", 
+                    paste0("Decile", 1:10),
+                    "Top 10 Bottom 40 Ratio", 
+                    "Top 20 Bottom 20 Ratio"
+  )
+  
+  title_use_vec <- c(
+    "Mean (daily per capita income or consumption 2017 PPP US$)", 
+    "Median (daily per capita income or consumption 2017 PPP US$)", 
+    "Gini index (0-100)",
+    "MLD (mean log deviation)", 
+    paste0("Decile", paste0(1:10, " welfare share (percent)")), 
+    "Ratio of top 10 to bottom 40 welfare share", 
+    "Ratio of top 20 to bottom 20 welfare share"
+  )
+  
+  use_title <- title_use_vec[
+    which(
+      title_lookup %chin% ind
+    )
+  ]
+  
+  return(use_title)
+  
+}
+
+
+
 create_data_imputed_by_countries <- function(
     dt, 
     countries_selected  = c("South Africa", "Colombia", "United States"), 
@@ -336,23 +371,7 @@ create_data_imputed_by_countries_two_years <- function(
 ```
 
 
-About and Definitions
-===========================================================
-
-Column {data-width=900}
------------------------------------------------------------------------
-
-### About
-
-this is the about section
-
-### Definitions
-
-some definitions
-
-
-
-Trends
+Trends {#tab_trends}
 ===========================================================
 
 
@@ -417,9 +436,9 @@ checkboxInput("log_y_3_fig2",
 
 # Select region for scatter plot to highlight
 selectInput("countries_selected_3",
-            label    = "Select countries to plot",
+            label    = "Select economies to plot",
             choices  = c(dt_pip$country_name |> unique() |> sort()),
-            selected = c("South Africa", "Colombia", "United States"),
+            selected = c("Colombia", "Ghana", "Argentina", "Thailand"),
             multiple = TRUE)
 
 
@@ -583,10 +602,14 @@ first_points = first_points[dt, on = .(country_name), nomatch = 0]
 # Initialize ggplot object
 tp1 <- ggplot(dt) +
   labs(
-    title = paste("Figure 1:", input$ineq_indicatorY_3_fig1, "over time"), 
-    subtitle = "Selected countries", 
+    title = paste(
+      "Figure 1:", 
+      input$ineq_indicatorY_3_fig1, 
+      "over time"
+    ), 
+    subtitle = "Selected Economies", 
     x = "", 
-    y = input$ineq_indicatorY_3_fig1
+    y = title_function(input$ineq_indicatorY_3_fig1)
   ) +
   theme_classic() +
   theme(legend.position = "none")
@@ -600,7 +623,7 @@ if(input$log_y_3_fig1 == TRUE){
 
 # Add geom_point and geom_line
 tp1 <- tp1 +
-  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name), size = 3) +
+  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name), size = 2.5) +
   geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
   scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
 
@@ -609,7 +632,7 @@ tp1 <- # Add geom_text for labeling the first point for each country
 tp1 <- tp1 +
   geom_text(data = first_points, 
             aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
-            size = 3.5)
+            size = 2.5)
 
 if(input$log_y_3_fig1 == TRUE){
   tp1 <- tp1 +
@@ -657,9 +680,9 @@ first_points = first_points[dt, on = .(country_name), nomatch = 0]
 tp1 <- ggplot(dt) +
   labs(
     title = paste("Figure 2:", input$ineq_indicatorY_3_fig2, "over time"), 
-    subtitle = "Selected countries", 
+    subtitle = "Selected Economies", 
     x = "", 
-    y = input$ineq_indicatorY_3_fig2
+    y = title_function(input$ineq_indicatorY_3_fig2)
   ) +
   theme_classic() +
   theme(legend.position = "none")
@@ -673,7 +696,7 @@ if(input$log_y_3_fig2 == TRUE){
 
 # Add geom_point and geom_line
 tp1 <- tp1 +
-  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 3) +
+  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name), size = 2.5) +
   geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
   scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
 
@@ -682,7 +705,7 @@ tp1 <- # Add geom_text for labeling the first point for each country
 tp1 <- tp1 +
   geom_text(data = first_points, 
             aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
-            size = 3.5)
+            size = 2.5)
 
 if(input$log_y_3_fig2 == TRUE){
   tp1 <- tp1 +
@@ -711,7 +734,7 @@ dt_trend_plotly
 
 
 
-Change Over Time
+Change Over Time {#tab_changeovertime}
 ===========================================================
 
 
@@ -745,14 +768,14 @@ selectInput("ineq_indicator",
 selectInput("initial_year",
             label    = "Initial Year",
             choices  = dt_pip$year |> unique() |> sort(),
-            selected = 1998,
+            selected = 2010,
             multiple = FALSE)
 
 
 # Select initial year
 sliderInput("interval", 
              label = "Interval Length: measure the change over how many years?",
-             min = 1, max = 10, value = 5, step = 1)
+             min = 1, max = 10, value = 10, step = 1)
 
 # Select initial year
 sliderInput("window", 
@@ -832,8 +855,8 @@ p <- ggplot(data = dt1) +
   theme_classic() +
   labs(
     title = paste("Change in", input$ineq_indicator, "from circa", as.numeric(input$initial_year), "to circa", as.numeric(input$initial_year) + as.numeric(input$interval)),
-    subtitle = paste("Countries ordered from highest to lowest by initial", input$ineq_indicator),
-    x = paste(input$ineq_indicator),
+    subtitle = paste("Economies ordered from highest to lowest by initial", input$ineq_indicator),
+    x = title_function(input$ineq_indicator),
     y = ""
   ) + 
   theme(legend.position = "none")
@@ -876,7 +899,7 @@ for (i in 1:length(pp$x$data)) {
     pp$x$data[[i]]$hovertemplate <- paste0(
       "Initial",input$ineq_indicator, ": %{x}<br>",
       "Change: %{xend}<br>",
-      "Country: %{y}<br>"
+      "Economy: %{y}<br>"
     )
   }
   
@@ -884,7 +907,7 @@ for (i in 1:length(pp$x$data)) {
   if(pp$x$data[[i]]$type == 'scatter' && pp$x$data[[i]]$mode == 'markers') {
     pp$x$data[[i]]$hovertemplate <- paste0(
       input$ineq_indicator, ": %{x}<br>",
-      "Country: %{y}<br>"#,
+      "Economy: %{y}<br>"#,
       #"Mean Welfare: %{marker.size}<br>"
     )
   }
@@ -904,31 +927,37 @@ Column {.tabset .tabset-fade}
 
 ### Explanation of the chart
 
+go to the [definitions page](#definitions)
+go to [Definitions](#Definitions)
+go to [About](#About)
+go to [both](#AboutDefinitions)
+go to [both](#AboutDefs)
+
+
 ```{r}
 #h3("Changes in chosen indicator over time")
 
-p("This plot shows the change in the selected indicator over time for countries where there is survey data in the chosen period. The", strong("dot", style = "color:black"), "provides two pieces of information. First, its x-axis position gives the initial indicator value for that country. Second, the dot's size provides the country's mean welfare level in the initial year.  The", strong("horizontal line segment", style = "color:black"), "connects the initial and final year indicator values. The", strong("color", style = "color:black"), "indicates whether a country's outcomes improve over the chosen interval - when mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has increased. The countries on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.")
-# 
+
+p("This plot shows the change in the selected indicator over time for economies where there is comparable survey data in the chosen period. The ", strong("dot", style = "color:black"), " gives the initial indicator value for that economy The ", strong("horizontal line segment", style = "color:black"), " connects the initial and final year indicator values. The ", strong("color", style = "color:black"), " indicates whether a economy's outcomes improve over the chosen interval. When mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has worsened. The economies on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.")
+
+# p("This plot shows the change in the selected indicator over time for economies where there is survey data in the chosen period. The x-axis position of the", strong("dot", style = "color:black"), "gives the initial indicator value for that economy. The", strong("horizontal line segment", style = "color:black"), "connects the initial and final year indicator values. The", strong("color", style = "color:black"), "indicates whether an economy's outcomes improve over the chosen interval - when mean or median pr one of the decile shares are selected, green implies that these measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has increased. The economies on the y-axis are ordered according to the chosen indicator, where the top economy has the largest indicator value in the initial year.")
+
+
+h4("What if an economy has no surveys in the chosen years?")
+
+p("Users specify the initial year (e.g., 2000) and the period over which they would like to study the change (e.g., the interval length is 5 years for looking at the 2000-2005 period).")
+
+p("Data might be missing for some economies for specific years. To increase the number of economies available, users can specify a circa year window. For example, if the chosen circa window is 2, then data 2 years either side of 2000 are considered (i.e., between 1998 and 2002). Within the circa window, data points in the initial and final years are selected with a preference for closer and newer data points: For example, if data for 2000 is missing, the algorithm will first look for data in 2001 and if 2001 data is also missing, it will then search in 1999. If both are missing, it will look for data in 2002 and 1998. An equivalent process is applied to the final year.")
+
+p("With a circa window larger than zero, the duration over which changes are measured differs across economies. For example, with an interval of 5 years and a window of 2, the duration varies between 1 year and 9 years (e.g. 2002-2003 and 1998-2007 are both permissible).")
+
 
 # 
-# strong("the colors of the dots of the line represent the decile to which the country belongs.")
-# 
-# 
-# h3("How to use")
-# 
-# p("1. Select the indicator.")
-# p("2. Select the initial year.")
-# p("3. Set the interval length. ")
-# p("4. Set the circa years window.")
-# 
-
-h4("What if a country has no surveys in the chosen years?")
-
-p("Data might be missing for some countries for these specific years. The imputation procedure works as follows:")
-p("1. Initial Year Imputation: If data for the initial year (e.g., 2000) is missing, the algorithm will first look for data in the subsequent year (2000 + 1 = 2001). If the 2001 data is also missing, it will then search in the previous year (2000 - 1 = 1999).")
-p("2. End Year: A similar process is applied for the end year (e.g., 2005 if the chosen interval length is 5). If the data for 2005 is missing, first, the algorithm looks for data in 2005 + 1 = 2006, and then 2005 - 1 = 2004.")
-p("3. Circa years window: The imputation employs a user-defined parameter. The window length limits the range of years considered for imputation. For example, if the chosen window is 2, then the imputation for the year 2000 will only consider data up to 2002 and down to 1998.")
-p("Note: this means that if the chosen window is larger than zero, the plotted change in the selected indicator for a particular country may occur over a period longer than the chosen interval length.")
+# p("Data might be missing for some economies for these specific years. The imputation procedure works as follows:")
+# p("1. Initial Year Imputation: If data for the initial year (e.g., 2000) is missing, the algorithm will first look for data in the subsequent year (2000 + 1 = 2001). If the 2001 data is also missing, it will then search in the previous year (2000 - 1 = 1999).")
+# p("2. End Year: A similar process is applied for the end year (e.g., 2005 if the chosen interval length is 5). If the data for 2005 is missing, first, the algorithm looks for data in 2005 + 1 = 2006, and then 2005 - 1 = 2004.")
+# p("3. Circa years window: The imputation employs a user-defined parameter. The window length limits the range of years considered for imputation. For example, if the chosen window is 2, then the imputation for the year 2000 will only consider data up to 2002 and down to 1998.")
+# p("Note: this means that if the chosen window is larger than zero, the plotted change in the selected indicator for a particular economy may occur over a period longer than the chosen interval length.")
 
 
 
@@ -964,7 +993,7 @@ selectInput("ineq_indicatorX",
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
-            selected = "Gini")
+            selected = "Mean")
 # Select Indicator
 selectInput("ineq_indicatorY", 
             label = "Indicator y-axis:",
@@ -986,7 +1015,7 @@ selectInput("ineq_indicatorY",
               "Top 10 Bottom 40 Ratio", 
               "Top 20 Bottom 20 Ratio"
             ),
-            selected = "Mean")
+            selected = "Gini")
 
 
 selectInput( "select_welfare_type", 
@@ -1005,7 +1034,7 @@ checkboxGroupInput(
 
 
 selectInput("countries_selected",
-            label    = "Select countries to highlight",
+            label    = "Select economies",
             choices  = c(
               "All", 
               dt_pip$region_name |> 
@@ -1017,7 +1046,7 @@ selectInput("countries_selected",
             multiple = TRUE)
 # Select region for scatter plot to highlight
 selectInput("background_regions",
-            label    = "Select countries to compare to",
+            label    = "Select comparison economies",
             choices  = c(
               "All", 
               dt_pip$region_name |> 
@@ -1328,8 +1357,8 @@ transformation_y <- function(x){
 sp1 <- ggplot(dt_use_sp()) +
   labs(
     title = paste("Relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
-    x = input$ineq_indicatorX,
-    y = input$ineq_indicatorY, 
+    x = title_function(input$ineq_indicatorX),
+    y = title_function(input$ineq_indicatorY), 
     color = "Region"
   )
 
@@ -1419,11 +1448,19 @@ Column {.tabset .tabset-fade}
 ### Explanation of the chart
 
 ```{r}
-p("This scatterplot shows the relationship between your two selected inequality indicators. By default, it shows all data, regardless of country, region, reporting level, or whether welfare is measured by consumption or income. Making selections on the side panel will highlight only the relevant data (e.g. selecting SSA as the region and consumption as the welfare measure highlights data for Sub-Saharan Africa where welfare is measured by consumption). If \"Select All Regions\" is ticked, then all countries and regions satisfying the \"Reporting level\" and \"Consumption or Income\" selections will be displayed. The tick box at the bottom of the side panel allows you to plot only the selected data rather than merely highlighting the selected data, removing the grey points.")
+
+
+p("This scatterplot shows the relationship between two selected indicators. By default, it shows all data, regardless of economy, region, or whether welfare is measured by consumption or income. Making selections on the side panel will limit the display to the selected data (e.g. selecting SSA as the region and consumption as the welfare measure plots data for Sub-Saharan Africa where welfare is measured by consumption). The selected data can be compared against other economies or regions. Dots are colored by region.")
 
 p("The plot provides a feature for incorporating a line to depict the underlying relationship between variables. This line represents the conditional mean, estimated via locally estimated scatterplot smoothing (LOESS), and is accompanied by 95% confidence intervals.")
 
-p(strong("Hint:", style = "black"), "Click on the region in the legend to remove from the plot.")
+#p("This scatterplot shows the relationship between your two selected indicators. By default, it shows all data, regardless of economy, region, reporting level, or whether welfare is measured by consumption or income. Making selections on the side panel will highlight only the relevant data (e.g. selecting SSA as the region and consumption as the welfare measure highlights data for Sub-Saharan Africa where welfare is measured by consumption). If \"Select All Regions\" is ticked, then all economies and regions satisfying the \"Reporting level\" and \"Consumption or Income\" selections will be displayed. The tick box at the bottom of the side panel allows you to plot only the selected data rather than merely highlighting the selected data, removing the grey points.")
+
+#p("The plot provides a feature for incorporating a line to depict the underlying relationship between variables. This line represents the conditional mean, estimated via locally estimated scatterplot smoothing (LOESS), and is accompanied by 95% confidence intervals.")
+
+# p(strong("Hint:", style = "black"), "Click on the region in the legend to remove from the plot.")
+# 
+
 ```
 
 
@@ -1459,7 +1496,7 @@ checkboxGroupInput("ineq_indicator_table",
 
 
 selectInput("select_countries_table", 
-            label = "Countries:",
+            label = "Economies:",
             choices = c(
               "All", 
               dt_pip$region_name |> 
@@ -1734,7 +1771,7 @@ list_of_columns <- lapply(
   
 t <- layout(
   t,
-  title   = "PIP Key Inequality Indicators, Selected Country and Years",
+  title   = "PIP Key Inequality Indicators, Selected Economies and Years",
   titlefont = list(color = 'black'), 
   title_x = 0 
 )
@@ -1757,6 +1794,35 @@ output$downloadData <- downloadHandler(
 
 
 ```
+
+
+
+About and Definitions {#tab_about}
+===========================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### About {#About}
+
+[Add description]
+
+[Add some caveats: (1) Comparability; (2) Income vs. consumption; (3) Household surveys underrepresenting the top.]
+
+The term country, used interchangeably with economy, does not imply political independence but refers to any territory for which authorities report separate social or economic statistics. For any questions regarding the data or methodology, please contact pip@worldbank.org.
+
+Please cite the data as: World Bank. (2023). Poverty and Inequality Platform (version 20230919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessed `r today()`.
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Definitions {#Definitions}
+
+<span class="underline">Inequality indicators:</span>
+The **Gini** index ranges from 0 (perfect equality) to 100 (complete inequality). The **mean log deviation (MLD)** belongs to the family of generalized entropy inequality measures. The MLD has a minimum value of 0 (perfect equality) and has no upper bound. The Gini index is especially sensitive to changes around the middle of the distribution, while the MLD is more sensitive to changes at the bottom. The **decile shares** focus on particular parts of the distribution of income or consumption: Households are first ordered according to their welfare per capita, such that the first decile contains the 10% of the population with the lowest welfare and so on. Decile shares measure the share of total welfare belonging to each decile. The **top 10 to bottom 40 ratio** (also known as the Palma ratio) compares the welfare share of the richest tenth of the population to the poorest 40 percent. Similarly, the **top 20 to bottom 20 ratio** is the share of the richest quintile to the poorest quintile. More details on the definition of the indicators can be found [here](https://datanalytics.worldbank.org/PIP-Methodology/surveyestimates.html#inequality).
+
+<span class="underline">Other variables:</span>
+[Add explanation for regions, year (round down of decimal year), circa years
 
 
 
