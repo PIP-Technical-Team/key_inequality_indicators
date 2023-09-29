@@ -102,13 +102,22 @@ dt_pip <-
              }, 
          by = .(country_name, year, reporting_level)
          ]
+# make deciles percentages
+dec_cols <- paste0("decile", 1:10)
+
+# Multiply each decile column by 100
+dt_pip[, (paste0("decile", 1:10)) := lapply(.SD, function(x) x * 100), .SDcols = paste0("decile", 1:10)]
 
 ```
 
 
 ```{r load-data-functions}
 
-
+downloadButtonRmd <- function (outputId, label = "Download", class = NULL, ...)  {
+     tags$a(id = outputId, class = paste("btn btn-default shiny-download-link", 
+        class), href = "", target = "_blank", download = NA, 
+        icon("download"), label, ...)
+ }
 
 title_function <- function(ind){
   
@@ -122,13 +131,13 @@ title_function <- function(ind){
   )
   
   title_use_vec <- c(
-    "Mean (daily per capita income or consumption 2017 PPP US$)", 
-    "Median (daily per capita income or consumption 2017 PPP US$)", 
+    "Mean (daily per capita, 2017 $PPP)", 
+    "Median (daily per capita, 2017 $PPP)", 
     "Gini index (0-100)",
     "MLD (mean log deviation)", 
     paste0("Decile", paste0(1:10, " welfare share (percent)")), 
-    "Ratio of top 10 to bottom 40 welfare share", 
-    "Ratio of top 20 to bottom 20 welfare share"
+    "Ratio of top 10 to bottom 40 share", 
+    "Ratio of top 20 to bottom 20 share"
   )
   
   use_title <- title_use_vec[
@@ -140,7 +149,6 @@ title_function <- function(ind){
   return(use_title)
   
 }
-
 
 
 create_data_imputed_by_countries <- function(
@@ -641,19 +649,33 @@ if(input$log_y_3_fig1 == TRUE){
 
 dt_trend_plotly <- ggplotly(tp1)
 
-# Loop through traces to update hovertemplate
-for (i in 1:length(dt_trend_plotly$x$data)) {
-  dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
-    "Year: %{x}<br>",
-    input$ineq_indicatorY_3_fig1, ": %{y}<br>"
-  )
-  
-}
+# # Loop through traces to update hovertemplate
+# for (i in 1:length(dt_trend_plotly$x$data)) {
+#   dt_trend_plotly$x$data[[i]]$hovertemplate <- paste0(
+#     "Year: %{x}<br>",
+#     input$ineq_indicatorY_3_fig1, ": %{y}<br>"
+#   )
+#   
+# }
 
+dt_trend_plotly <- dt_trend_plotly |> 
+   layout(
+     images = list(
+       list(
+         #source = "https://images.plot.ly/language-icons/api-home/python-logo.png",
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.035,
+            sizex = 0.2,
+            sizey = 0.2,
+            opacity = 0.8
+       )))
 dt_trend_plotly
 
-
 })
+
 
 ```
 
@@ -712,7 +734,19 @@ if(input$log_y_3_fig2 == TRUE){
   scale_y_log10(labels = function(x) round(exp(x), 0))
 }
 
-dt_trend_plotly <- ggplotly(tp1)
+dt_trend_plotly <- ggplotly(tp1)|> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.035,
+            sizex = 0.2,
+            sizey = 0.2,
+            opacity = 0.8
+       )))
 
 # Loop through traces to update hovertemplate
 for (i in 1:length(dt_trend_plotly$x$data)) {
@@ -891,6 +925,20 @@ if(input$ineq_indicator %chin% c("Mean", "Median", paste0("Decile", 1:10))){
 # Convert to plotly object
 pp <- ggplotly(p)
 
+pp <- pp |> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.03,
+            sizex = 0.2,
+            sizey = 0.2,
+            opacity = 0.8
+       )))
+
 # Loop through each trace to set custom hovertemplate
 for (i in 1:length(pp$x$data)) {
   
@@ -912,6 +960,8 @@ for (i in 1:length(pp$x$data)) {
     )
   }
 }
+
+
 
 # Display the plot
 pp
@@ -1228,112 +1278,7 @@ dt_use_sp <- reactive({
 ```{r plot2}
 
 renderPlotly({
-# 
-#   sp1 <- ggplot(dt_use_sp()) +
-#   labs(
-#     title = paste("Scatterplot of relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
-#     x = input$ineq_indicatorX,
-#     y = input$ineq_indicatorY, 
-#     color = "Region"
-#   )
-#   
-#   # Log the axes
-#   if(
-#     c("Y axis") %chin% input$log_transformations & 
-#     c("X axis") %chin% input$log_transformations
-#   ){
-#    sp1 <- sp1 +
-#           geom_point(aes(
-#       x = log(IndicatorX),
-#       y = log(IndicatorY),
-#       color = Region
-#     ))
-#    
-#     # add line
-#     if(input$add_line == TRUE){
-#         sp1 <- sp1 +
-#           geom_smooth(
-#             aes(
-#       x = log(IndicatorX),
-#       y = log(IndicatorY),
-#       stat = "smooth",
-#       position = "identity"
-#             )
-#           )
-#   }
-# 
-#     }
-# 
-#   if(
-#     (c("Y axis") %chin% input$log_transformations) & 
-#     !(c("X axis") %chin% input$log_transformations)
-#   ){
-#     sp1 <- sp1 +
-#           geom_point(aes(
-#       x = IndicatorX,
-#       y = log(IndicatorY),
-#       color = Region
-#     ))    
-#     # add line
-#     if(input$add_line == TRUE){
-#         sp1 <- sp1 +
-#           geom_smooth(
-#             aes(
-#       x = IndicatorX,
-#       y = log(IndicatorY),
-#       stat = "smooth",
-#       position = "identity"
-#             )
-#           )
-#   }
-# 
-#   }
-#   if(
-#     !(c("Y axis") %chin% input$log_transformations) & 
-#     (c("X axis") %chin% input$log_transformations)
-#   ){
-#     sp1 <- sp1 +
-#           geom_point(aes(
-#       x = log(IndicatorX),
-#       y = IndicatorY,
-#       color = Region
-#     ))    # add line
-#     if(input$add_line == TRUE){
-#         sp1 <- sp1 +
-#           geom_smooth(
-#             aes(
-#       x = log(IndicatorX),
-#       y = IndicatorY,
-#       stat = "smooth",
-#       position = "identity"
-#             )
-#           )
-#   }
-# 
-#   }
-#   if(
-#     !(c("Y axis") %chin% input$log_transformations) & 
-#     !(c("X axis") %chin% input$log_transformations)
-#   ){
-#     sp1 <- sp1 +
-#           geom_point(aes(
-#       x = IndicatorX,
-#       y = IndicatorY,
-#       color = Region
-#     ))    # add line
-#     if(input$add_line == TRUE){
-#         sp1 <- sp1 +
-#           geom_smooth(
-#             aes(
-#       x = IndicatorX,
-#       y = IndicatorY,
-#       stat = "smooth",
-#       position = "identity"
-#             )
-#           )
-#   }
-# 
-#   }
+
   
 transformation_x <- function(x){
   
@@ -1432,6 +1377,20 @@ for (i in 1:length(sp1_plotly$x$data)) {
 }
 
 # Display the plot
+sp1_plotly <- sp1_plotly |> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.03,
+            sizex = 0.2,
+            sizey = 0.2,
+            opacity = 0.8
+       )))
+
 sp1_plotly
 
 })
@@ -1565,9 +1524,10 @@ observeEvent(input$select_initial_year_table,
 
 # Render download button
 #downloadButton("downloadData", "Download CSV")
-downloadLink(
-  outputId = "downloadData", 
-  label = "Download as csv"
+
+downloadButtonRmd(
+  outputId = "DownloadButtonTable", 
+  label = "Download Data as CSV"
 )
 
 
@@ -1776,13 +1736,34 @@ t <- layout(
   title_x = 0 
 )
   
-  t
+ t <- t |> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= 0,
+            sizex = 0.2,
+            sizey = 0.2,
+            opacity = 0.8
+       )))
   
 })
 
 
 
-output$downloadData <- downloadHandler(
+# output$downloadData <- downloadHandler(
+#   filename = function() {
+#     paste("PIP-key-ineq-indicators_", Sys.Date(), ".csv", sep = "")
+#   },
+#   content = function(file) {
+#     write.csv(table(), file)
+#   }
+# )
+
+output$DownloadButtonTable <- downloadHandler(
   filename = function() {
     paste("PIP-key-ineq-indicators_", Sys.Date(), ".csv", sep = "")
   },
