@@ -16,14 +16,12 @@ htmltools::includeHTML("custom_header.html")
 
 
 ```{r setup-packages, include=FALSE}
+library("tidyverse")
+library("rlang")
 library("here")
 library("data.table")
-library("ggplot2")
 library("plotly")
 library("flexdashboard")  
-library("tidyverse")
-library("pak")
-library("rlang")
 library("joyn")
 library("gghighlight")
 library("DT")
