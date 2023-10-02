@@ -25,6 +25,7 @@ library("flexdashboard")
 library("joyn")
 library("gghighlight")
 library("DT")
+library("RColorBrewer")
 ```
 
 ```{r setup-data, include=FALSE}
@@ -688,7 +689,8 @@ if(input$log_y_3_fig1 == TRUE){
 tp1 <- tp1 +
   geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2.5) +
   geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
-  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))+
+  scale_color_brewer(palette = "Dark2")
 
 # Add geom_text for labeling the first point for each country
 tp1 <- # Add geom_text for labeling the first point for each country
@@ -791,7 +793,8 @@ if(input$log_y_3_fig2 == TRUE){
 tp1 <- tp1 +
   geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2.5) +
   geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
-  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))+
+  scale_color_brewer(palette = "Dark2")
 
 # Add geom_text for labeling the first point for each country
 tp1 <- # Add geom_text for labeling the first point for each country
@@ -925,6 +928,13 @@ selectInput(
   multiple = TRUE
 )
 
+
+downloadButtonRmd(
+  outputId = "DownloadButtonChange", 
+  label = "Download Data as CSV"
+)
+
+
 ```
 
 Column {data-width=1100 .tabset .tabset-fade}
@@ -1010,12 +1020,16 @@ p <- p +
   )
 
 # Conditional logic for color scales
-if(input$ineq_indicator %chin% c("Mean", "Median", paste0("Decile", 1:10))){
+if(input$ineq_indicator %chin% c("Mean", "Median")){
   p <- p + 
-    scale_color_manual(values = c("Negative" = "darkgreen", "Positive" = "red"))
-} else {
+    scale_color_manual(values = c("Negative" = "#1b9e77", "Positive" = "#d95f02"))
+} 
+if(input$ineq_indicator %chin% c(paste0("Decile", 1:10))){
+    p <- p + 
+    scale_color_manual(values = c("Negative" = "#9ecae1", "Positive" = "#3182bd"))
+}else {
   p <- p + 
-    scale_color_manual(values = c("Negative" = "red", "Positive" = "darkgreen"))
+    scale_color_manual(values = c("Negative" = "#d95f02", "Positive" = "#1b9e77"))
 }
 
 
@@ -1053,6 +1067,38 @@ pp <- pp |>
 # Display the plot
 pp
 })
+
+reactive({
+  
+dt <- dt_use()
+dt <- dt[
+  ,
+  .(country_name, year, region_name, Indicator1, AnnualizedChange)
+]
+setnames(
+  dt, 
+  old = c("country_name", "year", "region_name", "Indicator1", "AnnualizedChange"), 
+  new = c("Country", "Year", "Region", str_to_title(input$ineq_indicator), "Annualized_Change")
+)
+# setnames(
+#   dt, 
+#   old = c("IndicatorX", "IndicatorY"), 
+#   new = c(input$ineq_indicatorX, input$ineq_indicatorY)
+# )
+output$DownloadButtonChange <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators-change", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(
+      dt
+      , file)
+  }
+)
+
+})
+
+
 ```
 
 
@@ -1399,7 +1445,8 @@ sp1 <- ggplot(dt) +
     title = paste("Relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
     x = title_function(input$ineq_indicatorX),
     y = title_function(input$ineq_indicatorY)
-  )
+  )+
+  scale_color_brewer(palette = "Dark2")
 
 # Add geom_point
 sp1 <- sp1 +
@@ -1407,7 +1454,8 @@ sp1 <- sp1 +
     x = transformation_x(IndicatorX),
     y = transformation_y(IndicatorY),
     color = Region, 
-    text = text_tooltip
+    text = text_tooltip#, 
+    #frame = year
   ))
 
 # Add geom_smooth if required
@@ -1428,12 +1476,36 @@ sp1 <- sp1 + theme_classic()
 #   
 # if log transform, use original units
   if(c("X axis" %chin% input$log_transformations)){
-    sp1 <- sp1 +
-  scale_x_log10(labels = function(x) round(exp(x), 0))
+    
+      if(input$ineq_indicatorX == "Mean"){
+        sp1 <- sp1 + 
+          scale_x_log10(
+            labels = function(x) round(exp(x), 0), 
+            limits = c(log(1.1), log(94))
+          )
+      } else{
+        sp1 <- sp1 + 
+          scale_x_log10(
+            labels = function(x) round(exp(x), 0)
+          )
+      }
+  
   }
   if(c("Y axis" %chin% input$log_transformations)){
-    sp1 <- sp1 +
-  scale_y_log10(labels = function(x) round(exp(x), 0))
+    
+      if(input$ineq_indicatorY == "Mean"){
+        sp1 <- sp1 + 
+          scale_y_log10(
+            labels = function(x) round(exp(x), 0), 
+            limits = c(log(1.1), log(94))
+          )
+      } else{
+        sp1 <- sp1 + 
+          scale_y_log10(
+            labels = function(x) round(exp(x), 0)
+          )
+      }
+  
   }
 # input$background_regions
 #   
@@ -1449,7 +1521,11 @@ if(!is.null(input$background_regions)){
   
 }
 
-
+#sp1 <- sp1 +
+  # Here comes the gganimate specific bits
+  #labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'life expectancy') +
+  # transition_time(year) +
+  # ease_aes('linear')
 
 # Convert to plotly object
 sp1_plotly <- ggplotly(sp1, tooltip = "text")
@@ -1481,7 +1557,8 @@ sp1_plotly <- sp1_plotly |>
                    font=list(size=7, color="grey")
                    ))
 
-sp1_plotly
+sp1_plotly #|> 
+ # animation_opts()
 
 
 })
