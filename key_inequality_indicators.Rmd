@@ -109,6 +109,26 @@ dec_cols <- paste0("decile", 1:10)
 # Multiply each decile column by 100
 dt_pip[, (paste0("decile", 1:10)) := lapply(.SD, function(x) x * 100), .SDcols = paste0("decile", 1:10)]
 
+# Income groups
+dt_class <- haven::read_dta(
+  here::here("data", "CLASS.dta")
+)
+dt_class <- dt_class |> 
+  as.data.table() |> 
+  unique(
+    by = c("economy", "incgroup_current")
+  )
+dt_pip <- joyn::merge(
+  x = dt_pip, 
+  y = dt_class, 
+  by = c("country_name = economy"), 
+  keep = "left", 
+  yvars = "incgroup_current"
+)
+dt_pip[
+  , 
+  report := NULL
+]
 ```
 
 
@@ -725,12 +745,12 @@ dt_trend_plotly <- dt_trend_plotly |>
        annotations = 
                  list(
                    x = 0, 
-                   y = -0.06, 
+                   y = -0.05, 
                    text = source_text, 
                    showarrow = F, 
                    xref='paper', 
                    yref='paper', 
-                   font=list(size=7, color="grey")
+                   font=list(size=6, color="grey")
                    )
        )
 dt_trend_plotly
@@ -826,12 +846,12 @@ dt_trend_plotly <- dt_trend_plotly |>
        annotations = 
                  list(
                    x = 0, 
-                   y = -0.06, 
+                   y = -0.05, 
                    text =source_text, 
                    showarrow = F, 
                    xref='paper', 
                    yref='paper', 
-                   font=list(size=7, color="grey")
+                   font=list(size=6, color="grey")
                    ))
 
 
@@ -1052,12 +1072,12 @@ pp <- pp |>
        annotations = 
                  list(
                    x = 0, 
-                   y = -0.065, 
+                   y = -0.05, 
                    text = source_text, 
                    showarrow = F, 
                    xref='paper', 
                    yref='paper', 
-                   font=list(size=7, color="grey")
+                   font=list(size=6, color="grey")
                    ))
 
 
@@ -1228,7 +1248,13 @@ selectInput("background_regions",
             ),
             selected = "",
             multiple = TRUE)
-
+radioButtons("color_by", 
+                   label = "Color points by:",  
+                   choices = c(
+                     "Region", 
+                     "Income group"
+                   ), 
+                   selected = c("Region"))
 
 radioButtons("all_years_scatterplot", 
                    label = "Select years to plot",  
@@ -1278,7 +1304,7 @@ observeEvent(input$select_initial_year_scatterplot,
 })
 
 ```
-Advanced Feature
+Advanced Features:
 ```{r}
 checkboxInput("add_line", 
               label = "Add fitted line", 
@@ -1388,7 +1414,11 @@ dt_use_sp <- reactive({
     , 
     Region := region_code
   ]
-  
+  dt_use_sp[
+    , 
+    `Income Group` := incgroup_current
+  ]
+  # factor(incgroup_current, levels = incgroup_current[order(mean)])]
   # Define tooltip
   dt_use_sp[
     , 
@@ -1396,6 +1426,7 @@ dt_use_sp <- reactive({
       paste0(
         "Economy: ", country_name, "\n",
         "Region: ", region_name,  "\n",
+        "Income Group: ", incgroup_current, "\n",
         input$ineq_indicatorX, ": ", round(IndicatorX,2),  "\n",
         input$ineq_indicatorY, ": ", round(IndicatorY, 2),  "\n",
         "Survey type: ", str_to_title(welfare_type)
@@ -1438,7 +1469,11 @@ transformation_y <- function(x){
 }
 # define tooltip ----
 dt <- dt_use_sp()
-
+# setnames(
+#   dt, 
+#   old = c("incgroup_current"), 
+#   new = c("Income Group")
+# )
 # Initialize ggplot object
 sp1 <- ggplot(dt) +
   labs(
@@ -1449,14 +1484,28 @@ sp1 <- ggplot(dt) +
   scale_color_brewer(palette = "Dark2")
 
 # Add geom_point
-sp1 <- sp1 +
+if(input$color_by == "Region"){
+  
+  sp1 <- sp1 +
   geom_point(aes(
     x = transformation_x(IndicatorX),
     y = transformation_y(IndicatorY),
     color = Region, 
-    text = text_tooltip#, 
-    #frame = year
+    text = text_tooltip
   ))
+  
+} else{
+    sp1 <- sp1 +
+  geom_point(aes(
+    x = transformation_x(IndicatorX),
+    y = transformation_y(IndicatorY),
+    color = `Income Group`, 
+    text = text_tooltip
+  ))
+  
+  
+}
+
 
 # Add geom_smooth if required
 if (input$add_line == TRUE) {
@@ -1554,7 +1603,7 @@ sp1_plotly <- sp1_plotly |>
                    showarrow = F,
                    xref='paper',
                    yref='paper',
-                   font=list(size=7, color="grey")
+                   font=list(size=6, color="grey")
                    ))
 
 sp1_plotly #|> 
@@ -1777,10 +1826,10 @@ make_table_across_countries <- function(
   selected_cols <- c(
     "Country",
     "Region",
-    #"Region_code",
     "Year",
     "Reporting_level",
     "Welfare_type",
+    "Comparable_spell",
     ineq_indicators
   )
   selected_cols <- 
@@ -1944,7 +1993,7 @@ t <- layout(
                    showarrow = F, 
                    xref='paper', 
                    yref='paper', 
-                   font=list(size=7, color="grey")
+                   font=list(size=6, color="grey")
                    ))
   
 })
