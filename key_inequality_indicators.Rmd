@@ -31,7 +31,7 @@ library("DT")
 # Total pip output
 
 # Step 1: data ----
-dt_pip <- pipr::get_stats()  # install entire data
+dt_pip <- pipr::get_stats(format = "rds")  # install entire data
 dt_pip <- data.table(dt_pip) # as data.table
 dt_pip[
   , 
