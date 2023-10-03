@@ -1,6 +1,6 @@
 ---
-title: " PIP Key Inequality Indicators"
-output: 
+title: ' PIP Key Inequality Indicators'
+output:
   flexdashboard::flex_dashboard:
     orientation: columns
     social: menu
@@ -8,6 +8,9 @@ output:
     source_code: embed
     vertical_layout: fill
 runtime: shiny
+resource_files:
+- data/CLASS.dta
+- data/CLASS.dta
 ---
 
 ```{r}
@@ -1130,11 +1133,11 @@ Column {.tabset .tabset-fade}
 
 ### Explanation of the chart
 
-go to the [definitions page](#definitions)
-go to [Definitions](#Definitions)
-go to [About](#About)
-go to [both](#AboutDefinitions)
-go to [both](#AboutDefs)
+<!-- go to the [definitions page](#definitions) -->
+<!-- go to [Definitions](#Definitions) -->
+<!-- go to [About](#About) -->
+<!-- go to [both](#AboutDefinitions) -->
+<!-- go to [both](#AboutDefs) -->
 
 
 ```{r}
@@ -2035,7 +2038,7 @@ The term country, used interchangeably with economy, does not imply political in
 
 For more details on the methodology, please visit the [PIP Methodology Handbook](https://datanalytics.worldbank.org/PIP-Methodology/) and the [Global Poverty Monitoring Technical Notes](https://pip.worldbank.org/publication). For any questions regarding the data or methodology, please contact pip@worldbank.org.
 
-Please cite the data as:  World Bank. (2023). Poverty and Inequality Platform (version 20230919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessedr`r today()`. 
+Please cite the data as:  World Bank. (2023). Poverty and Inequality Platform (version 20230919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessed `r today()`. 
 
 
 
