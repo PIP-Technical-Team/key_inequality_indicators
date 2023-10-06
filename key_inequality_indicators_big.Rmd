@@ -1,0 +1,2080 @@
+---
+title: ' PIP Key Inequality Indicators'
+output:
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    social: menu
+    theme: paper
+    #source_code: embed
+    vertical_layout: fill
+runtime: shiny
+resource_files:
+- data/CLASS.dta
+- data/CLASS.dta
+---
+
+```{r}
+htmltools::includeHTML("custom_header.html")
+```
+
+
+```{r setup-packages, include=FALSE}
+library("tidyverse")
+library("rlang")
+library("here")
+library("data.table")
+library("plotly")
+library("flexdashboard")  
+library("joyn")
+library("gghighlight")
+library("DT")
+
+```
+
+```{r setup-data, include=FALSE}
+source_text <- paste("Source: World Bank, Poverty and Inequality Platform (version 20230919_2017).")
+
+# Total pip output
+
+# Step 1: data ----
+dt_pip <- pipr::get_stats(format = "rds")  # install entire data
+dt_pip <- data.table(dt_pip) # as data.table
+dt_pip[
+  , 
+  `:=`(
+    top_10_bottom_40_ratio = (decile10)/(decile1 + decile2 + decile3 + decile4), 
+    top_20_bottom_20_ratio = (decile10+decile9)/(decile1 + decile2)
+  )
+]
+dt_pip[, 
+       gini:= gini*100]
+
+
+# Step 2: creating general objects ----
+pip_countries <- unique(dt_pip$country_name) # list of countries
+pip_countries_multiple_welfare_type <- 
+  dt_pip[, 
+         if(.N>1) .SD, 
+         by = .(country_name, year, welfare_type)
+         ]$country_name |>
+  unique()
+
+pip_countries_multiple_reporting_level <- 
+  dt_pip[, 
+         if(.N > 1) 
+           .SD, 
+         by = .(country_name, year, reporting_level)
+         ]$country_name |> 
+  unique()
+
+pip_countries_regions <- 
+  unique(dt_pip, 
+         by = c("country_name", "region_code")
+         )[, 
+           .(country_name, region_code, region_name)
+           ]
+region_matching <- unique(
+  dt_pip[
+    ,
+    .(region_name), 
+    by = region_code
+  ]
+)
+# Exclude double rows
+dt_pip <- 
+  dt_pip[, 
+         if (.N > 1) {
+           .SD[!reporting_level == "rural"] 
+          } else {
+            .SD
+            }, 
+         by = .(country_name, year, welfare_type)
+         ][, 
+           if (.N > 1) {
+             .SD[reporting_level == "national"] 
+             } else {
+               .SD
+               }, 
+           by = .(country_name, year, welfare_type)
+           ]
+dt_pip <- 
+  dt_pip[, 
+         if (.N > 1) {
+           .SD[welfare_type == "income"] 
+           } else {
+             .SD
+             }, 
+         by = .(country_name, year, reporting_level)
+         ]
+# make deciles percentages
+dec_cols <- paste0("decile", 1:10)
+
+# Multiply each decile column by 100
+dt_pip[, (paste0("decile", 1:10)) := lapply(.SD, function(x) x * 100), .SDcols = paste0("decile", 1:10)]
+
+# Income groups
+dt_class <- haven::read_dta(
+  here::here("data", "CLASS.dta")
+)
+dt_class <- dt_class |> 
+  as.data.table() |> 
+  unique(
+    by = c("economy", "incgroup_current")
+  )
+dt_pip <- joyn::merge(
+  x = dt_pip, 
+  y = dt_class, 
+  by = c("country_name = economy"), 
+  keep = "left", 
+  yvars = "incgroup_current"
+)
+dt_pip[
+  , 
+  report := NULL
+]
+```
+
+
+```{r load-data-functions}
+
+downloadButtonRmd <- function (outputId, label = "Download", class = NULL, ...)  {
+     tags$a(id = outputId, class = paste("btn btn-default shiny-download-link", 
+        class), href = "", target = "_blank", download = NA, 
+        icon("download"), label, ...)
+ }
+
+title_function <- function(ind){
+  
+  title_lookup <- c("Mean", 
+                    "Median", 
+                    "Gini", 
+                    "MLD", 
+                    paste0("Decile", 1:10),
+                    "Top 10 Bottom 40 Ratio", 
+                    "Top 20 Bottom 20 Ratio"
+  )
+  
+  title_use_vec <- c(
+    "Mean (daily per capita, 2017 $PPP)", 
+    "Median (daily per capita, 2017 $PPP)", 
+    "Gini index (0-100)",
+    "MLD (mean log deviation)", 
+    paste0("Decile", paste0(1:10, " welfare share (percent)")), 
+    "Ratio of top 10 to bottom 40 share", 
+    "Ratio of top 20 to bottom 20 share"
+  )
+  
+  use_title <- title_use_vec[
+    which(
+      title_lookup %chin% ind
+    )
+  ]
+  
+  return(use_title)
+  
+}
+
+
+create_data_imputed_by_countries <- function(
+    dt, 
+    countries_selected  = c("South Africa", "Colombia", "United States"), 
+    year_selected       = 1998, 
+    indicator           = c("Gini"), 
+    welfare             = NULL, # if 'consumption' or 'income' then use *only* those
+    window_length       = 2 
+    
+){
+  
+  # Argument Checks ----
+  stopifnot(is.data.table(dt))
+  if(
+    is.null(countries_selected) | 
+    is.null(year)               | 
+    is.null(indicator)
+  ) stop ( "Must choose" )
+  if(
+    length(year) > 1            | 
+    length(indicator) > 1 
+  ) stop ( "Can only select one year and one indicator" )
+  
+  # Use copy of dt
+  dt_use <- copy( dt )
+  
+  indicator <- indicator |> 
+    str_replace_all(" ", "_") |> 
+    str_to_lower()
+  
+  # Rename 
+  setnames(
+    dt_use,
+    old     = c(indicator), 
+    new     = c("Indicator")
+  )
+  
+  # Filter ----
+  if( !is.null(welfare) ) { # welfare type
+    
+    dt_use <- dt_use[
+      welfare %chin% welfare_type
+    ]
+    
+  }
+  
+  # Filter by year and country name
+  dt_use <- dt_use[        # window length
+    year %chin% c( (year_selected - window_length):
+                     (year_selected + window_length))
+  ]
+  dt_use <- dt_use[
+    country_name %chin% countries_selected
+  ]
+  
+  # Fill Missing ----
+  dt_use <- joyn::merge(
+    CJ(
+      country_name = dt_use$country_name |> unique(), 
+      year         = dt_use$year         |> unique()
+    ),
+    dt_use, 
+    by = c("country_name", "year")
+  )
+  dt_use[, missing := ifelse(is.na(Indicator), TRUE, FALSE)] # missing indicator
+  dt_use <- dt_use[, report := NULL]
+  
+  # If missing, impute forward or backwards
+  setorder(dt_use, country_name, year) # order by year
+  dt_forward  <- 
+    dt_use[,
+           .SD[c((window_length + 1):.N)], 
+           by = country_name
+           ][
+             missing == FALSE
+             ][, 
+               .(Forward = min(year)-year_selected), 
+               by = country_name
+               ]
+dt_backward <- 
+  dt_use[, 
+         .SD[c(1:(window_length + 1))], 
+         by = country_name
+         ][
+           missing == FALSE
+           ][, 
+             .(Backward = abs(max(year)-year_selected)), 
+             by = country_name
+             ]
+
+dt_use <- joyn::merge(
+    dt_use, 
+    dt_forward, 
+    by = c("country_name"), 
+    yvars = T, 
+    match_type = "m:1", 
+    keep = "left"
+  )
+
+  dt_use <- dt_use[, report := NULL]
+  dt_use <- joyn::merge(
+    dt_use, 
+    dt_backward, 
+    by = c("country_name"), 
+    yvars = T, 
+    match_type = "m:1", 
+    keep = "left"
+  )
+  dt_use <- dt_use[, report := NULL]
+  dt_use[is.na(Forward), Forward := 100]
+  dt_use[is.na(Backward), Backward := 100]
+  dt_use[, Impute_Forward := (Backward >= Forward)]
+  
+  # Do imputation
+  dt_use[, 
+         Indicator := {
+    # Forward fill for Impute_Forward == FALSE
+    Indicator[Impute_Forward == FALSE] <- 
+      nafill(Indicator[Impute_Forward == FALSE], 
+             type = "locf")
+    # Backward fill for Impute_Forward == TRUE
+    Indicator[Impute_Forward == TRUE] <- 
+      nafill(Indicator[Impute_Forward == TRUE], 
+             type = "nocb")
+    # Return the modified Indicator
+    Indicator
+  }, by = country_name]
+  
+   # Do imputation of comparable spells
+  dt_use[, 
+         survey_comparability := {
+    # Forward fill for Impute_Forward == FALSE
+    survey_comparability[Impute_Forward == FALSE] <- 
+      na.locf(survey_comparability[Impute_Forward == FALSE])
+    # Backward fill for Impute_Forward == TRUE
+    survey_comparability[Impute_Forward == TRUE] <- 
+      na.locf(survey_comparability[Impute_Forward == TRUE], 
+             fromLast=TRUE)
+    # Return the modified Indicator
+    survey_comparability
+  }, by = country_name]
+  
+  # Years over which change occurs
+  dt_use[
+    , 
+  ImputeYears:= min(Forward, Backward), 
+  by = country_name
+  ]
+ dt_use[
+   ImputeYears == 100, 
+   ImputeYears := 0
+ ]
+  
+  # Keep only selected year
+  dt_use <- dt_use[ year == year_selected]
+  # Remove columns
+  dt_use[, c("Forward", "Backward") := NULL]
+  
+  setnames(
+    dt_use, 
+    old = "Indicator", 
+    new = tolower(indicator)
+  )
+  
+  # Return
+  return(dt_use)
+  
+}
+
+
+
+create_data_imputed_by_countries_two_years <- function(
+    dt = dt_pip, 
+    countries_selected  = c("South Africa", "Colombia", "United States"), 
+    year1_selected      = 1998, 
+    year2_selected      = 2005,
+    indicator           = c("Gini"), 
+    welfare             = NULL, # if 'consumption' or 'income' then use *only* those
+    window_length       = 2 
+    
+){
+  dt_use <- copy(dt)
+  dt_use <- dt_use[, MeanWelfare := mean]
+  # Data in Year 1
+  dt1 <- create_data_imputed_by_countries(
+    dt                 = dt_use, 
+    countries_selected = countries_selected, 
+    year_selected      = year1_selected, 
+    indicator          = indicator, 
+    welfare            = welfare, 
+    window_length      = window_length
+  )
+  indicator <- indicator |> str_replace_all(" ", "_") |> str_to_lower()
+  
+  setnames(
+    dt1, 
+    old = c(tolower(indicator), "ImputeYears", "Impute_Forward"), 
+    new = c("Indicator1", "ImputeYears1", "Impute_Forward1")
+  )
+  dt1 <- dt1[, .(country_name, year, Indicator1, MeanWelfare, ImputeYears1, Impute_Forward1, survey_comparability)]
+
+  # Data in Year 2
+  dt2 <- create_data_imputed_by_countries(
+    dt                 = dt_use, 
+    countries_selected = countries_selected, 
+    year_selected      = year2_selected, 
+    indicator          = indicator, 
+    welfare            = welfare, 
+    window_length      = window_length
+  )
+  setnames(
+    dt2, 
+    old = c(tolower(indicator), "ImputeYears", "Impute_Forward"), 
+    new = c("Indicator2", "ImputeYears2", "Impute_Forward2")
+  )
+  dt2 <- dt2[, .(country_name, year, Indicator2, ImputeYears2, Impute_Forward2, region_name, survey_comparability)]
+  
+  # Join the two years
+  dt_use <- joyn::merge(
+    dt1, 
+    dt2, 
+    keep = "inner", 
+    match_type = "1:1", 
+    by = c("country_name", "survey_comparability")
+  )
+  
+  # Find the change in indicator
+  dt_use[, report:=NULL]
+  dt_use[, Change := Indicator1-Indicator2]
+  dt_use[, ChangeColor := ifelse(Change<0, "Negative", "Positive")]
+  dt_use[
+    Impute_Forward1 == TRUE & Impute_Forward2 == TRUE, # both forward imputed, or not imputed at all
+    ChangeYears := {
+      year2_selected - year1_selected - ImputeYears1 + ImputeYears2
+    }
+  ]
+  dt_use[
+    Impute_Forward1 == FALSE & Impute_Forward2 == TRUE, # both forward imputed, or not imputed at all
+    ChangeYears := {
+      year2_selected - year1_selected + ImputeYears1 + ImputeYears2
+    }
+  ]
+  dt_use[
+    Impute_Forward1 == TRUE & Impute_Forward2 == FALSE, # both forward imputed, or not imputed at all
+    ChangeYears := {
+      year2_selected - year1_selected - ImputeYears1 - ImputeYears2
+    }
+  ]
+  dt_use[
+    Impute_Forward1 == FALSE & Impute_Forward2 == FALSE, # both forward imputed, or not imputed at all
+    ChangeYears := {
+      year2_selected - year1_selected + ImputeYears1 - ImputeYears2
+    }
+  ]
+  dt_use[, AnnualizedChange := Change/ChangeYears]
+  dt_use[, Change := abs(Change)]
+  dt_use[, country_name := factor(country_name, levels = country_name[order(Indicator1)])]
+  dt_use <- na.omit(dt_use)
+  
+  # Define tooltip
+  dt_use[
+    , 
+    text_tooltip := 
+      paste0(
+        "Economy: ", country_name, "\n",
+        "Region: ", region_name, "\n", 
+        "Initial Value: ", round(Indicator1, 2), "\n", 
+        "Annualized Change: ", round(AnnualizedChange, 2)
+        
+      )
+  ]
+  
+  # Return
+  return(dt_use)
+  
+}
+
+
+
+
+```
+
+
+Trends {#tab_trends}
+===========================================================
+
+
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r sidebar-plot-3}
+# Select Indicator
+selectInput("ineq_indicatorY_3_fig1", 
+            label = "Indicator on y-axis of Figure 1",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "MLD", 
+              "Gini", 
+              "Decile1",
+              "Decile2",
+              "Decile3",
+              "Decile4",
+              "Decile5",
+              "Decile6",
+              "Decile7",
+              "Decile8",
+              "Decile9",
+              "Decile10",
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Mean")
+
+# Select Indicator
+selectInput("ineq_indicatorY_3_fig2", 
+            label = "Indicator on y-axis of Figure 2",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "MLD", 
+              "Gini", 
+              "Decile1",
+              "Decile2",
+              "Decile3",
+              "Decile4",
+              "Decile5",
+              "Decile6",
+              "Decile7",
+              "Decile8",
+              "Decile9",
+              "Decile10",
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Gini")
+
+checkboxInput("log_y_3_fig1", 
+              label = "Log Y axis in Figure 1",  
+              value = FALSE)
+
+checkboxInput("log_y_3_fig2", 
+              label = "Log Y axis in Figure 2",  
+              value = FALSE)
+
+# Select region for scatter plot to highlight
+selectInput("countries_selected_3",
+            label    = "Select economies to plot",
+            choices  = c(dt_pip$country_name |> unique() |> sort()),
+            selected = c("Colombia", "Ghana", "Thailand"),
+            multiple = TRUE)
+
+
+radioButtons("all_years_plot", 
+                   label = "Select years to plot",  
+                   choices = c(
+                     "All", 
+                     "Custom"
+                   ), 
+                   selected = c("All"))
+
+
+conditionalPanel(
+  condition = "input.all_years_plot == 'Custom'",
+  selectInput("select_initial_year_plot", 
+              label = "Initial Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                min(), 
+              multiple = FALSE)
+)
+
+conditionalPanel(
+  condition = "input.all_years_plot == 'Custom'",
+  selectInput("select_final_year_plot", 
+              label = "Final Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                max(), 
+              multiple = FALSE)
+)
+
+observeEvent(input$select_initial_year_plot, 
+             {
+               updated_choices <- dt_pip[
+                 year > as.numeric(input$select_initial_year_plot), 
+                 unique(year)
+               ]
+               updated_choices <- sort(updated_choices)
+               updateSelectInput(
+                 session, 
+                 "select_final_year_plot", 
+                 choices = updated_choices, 
+                 selected = dt_pip$year |> max() 
+               )
+})
+
+
+downloadButtonRmd(
+  outputId = "DownloadButtonTrends2", 
+  label = "Download Data as CSV"
+)
+
+```
+
+
+
+```{r data-filter3}
+
+dt_trend_plot1 <- reactive({
+  
+  # Copy data table
+  dt_trend_plot1 <- copy(dt_pip)
+  
+  if(input$all_years_plot == "Custom"){
+    
+    dt_trend_plot1 <- dt_trend_plot1[
+      year >= input$select_initial_year_plot & 
+        year <= input$select_final_year_plot, 
+    ]
+    
+    
+  }
+  
+  # rename
+  ineq_indicators <- input$ineq_indicatorY_3_fig1 |> 
+    tolower() |> 
+    str_replace_all(
+      pattern = " ", 
+      replacement = "_"
+    )
+  
+  # Filter for selected countries
+  dt_trend_plot1 <- dt_trend_plot1[
+     country_name %chin% input$countries_selected_3
+  ]
+  
+  # Rename
+  setnames(
+    dt_trend_plot1, 
+    old = ineq_indicators, 
+    new = "IndicatorY"
+  )
+  
+  dt_trend_plot1
+  
+  
+  
+})
+
+
+dt_trend_plot2 <- reactive({
+  
+  # Copy data table
+  dt_trend_plot2 <- copy(dt_pip)
+  if(input$all_years_plot == "Custom"){
+    
+    dt_trend_plot2 <- dt_trend_plot2[
+      year >= input$select_initial_year_plot & 
+        year <= input$select_final_year_plot, 
+    ]
+    
+    
+  }
+   # rename
+  ineq_indicators <- input$ineq_indicatorY_3_fig2 |> 
+    tolower() |> 
+    str_replace_all(
+      pattern = " ", 
+      replacement = "_"
+    )
+  
+  # Filter for selected countries
+  dt_trend_plot2 <- dt_trend_plot2[
+     country_name %chin% input$countries_selected_3
+  ]
+  
+  # Rename
+  setnames(
+    dt_trend_plot2, 
+    old = ineq_indicators, 
+    new = "IndicatorY"
+  )
+  
+  dt_trend_plot2
+
+  
+  
+})
+
+```
+
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### 
+
+```{r plot3}
+
+renderPlotly({
+  
+# Assuming dt_trend plot1 is a function that returns your data in data.table format
+dt <- dt_trend_plot1()
+
+# Create a subset with only the first points for each country
+dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
+first_points = dt[, .SD[which.min(year)], by = country_name]
+first_points = first_points[dt, on = .(country_name), nomatch = 0]
+
+#Create tooltip variable
+dt[
+  ,
+  text_tooltip := (
+    paste0(
+      "Economy: "                        , country_name, "\n",
+      "Year: "                        , year,
+      "\n", input$ineq_indicatorY_3_fig1, ": " , round(IndicatorY, 2)
+    )
+  )
+]
+
+# Initialize ggplot object
+tp1 <- ggplot(dt) +
+  labs(
+    title = paste(
+      "Figure 1:", 
+      input$ineq_indicatorY_3_fig1, 
+      "over time"
+    ), 
+    subtitle = "Selected Economies", 
+    x = "", 
+    y = title_function(input$ineq_indicatorY_3_fig1)
+  ) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+# Conditional logic for log transformation
+if(input$log_y_3_fig1 == TRUE){
+  transformation <- function(x) log(x)
+} else {
+  transformation <- function(x) x
+}
+
+# Add geom_point and geom_line
+tp1 <- tp1 +
+  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2.5) +
+  geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))+
+  scale_color_brewer(palette = "Dark2")
+
+# Add geom_text for labeling the first point for each country
+tp1 <- # Add geom_text for labeling the first point for each country
+tp1 <- tp1 +
+  geom_text(data = first_points, 
+            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
+            size = 2.5)
+
+if(input$log_y_3_fig1 == TRUE){
+  tp1 <- tp1 +
+  scale_y_log10(labels = function(x) round(exp(x), 0))
+}
+
+dt_trend_plotly <- ggplotly(tp1, tooltip = "text")
+
+
+
+dt_trend_plotly <- dt_trend_plotly |> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.035,
+            sizex = 0.15,
+            sizey = 0.15,
+            opacity = 0.8
+       )
+       ), 
+       annotations = 
+                 list(
+                   x = 0, 
+                   y = -0.065, 
+                   text = source_text, 
+                   showarrow = F, 
+                   xref='paper', 
+                   yref='paper', 
+                   font=list(size=6, color="grey")
+                   )
+       )
+dt_trend_plotly
+
+})
+
+  
+
+
+```
+
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### 
+
+```{r plot3-2}
+
+renderPlotly({
+  
+# Assuming dt_trend plot1 is a function that returns your data in data.table format
+dt <- dt_trend_plot2()
+
+# Create a subset with only the first points for each country
+dt[, rel_nudge_y := 0.1 * (max(IndicatorY) - min(IndicatorY)), by = country_name]
+first_points = dt[, .SD[which.min(year)], by = country_name]
+first_points = first_points[dt, on = .(country_name), nomatch = 0]
+# Create tooltip variable
+dt[
+  , 
+  text_tooltip := (
+    paste0(
+      "Economy: "                        , country_name, "\n",
+      "Year: "                           , year, 
+      "\n", input$ineq_indicatorY_3_fig2 , ": " , round(IndicatorY, 2)
+    )
+  )
+]
+
+# Initialize ggplot object
+tp1 <- ggplot(dt) +
+  labs(
+    title = paste("Figure 2:", input$ineq_indicatorY_3_fig2, "over time"), 
+    subtitle = "Selected Economies", 
+    x = "", 
+    y = title_function(input$ineq_indicatorY_3_fig2)
+  ) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+# Conditional logic for log transformation
+if(input$log_y_3_fig2 == TRUE){
+  transformation <- function(x) log(x)
+} else {
+  transformation <- function(x) x
+}
+
+# Add geom_point and geom_line
+tp1 <- tp1 +
+  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2.5) +
+  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))+
+  scale_color_brewer(palette = "Dark2")
+
+# Add geom_text for labeling the first point for each country
+tp1 <- # Add geom_text for labeling the first point for each country
+tp1 <- tp1 +
+  geom_text(data = first_points, 
+            aes(x = year, y = transformation(IndicatorY - rel_nudge_y), label = country_name, color = country_name),
+            size = 2.5)
+
+if(input$log_y_3_fig2 == TRUE){
+  tp1 <- tp1 +
+  scale_y_log10(labels = function(x) round(exp(x), 0))
+}
+
+dt_trend_plotly <- ggplotly(tp1, tooltip = "text")
+
+dt_trend_plotly <- dt_trend_plotly |> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.035,
+            sizex = 0.15,
+            sizey = 0.15,
+            opacity = 0.8
+       )), 
+       annotations = 
+                 list(
+                   x = 0, 
+                   y = -0.065, 
+                   text =source_text, 
+                   showarrow = F, 
+                   xref='paper', 
+                   yref='paper', 
+                   font=list(size=6, color="grey")
+                   ))
+
+
+dt_trend_plotly
+
+})
+
+
+
+reactive({
+  
+
+output$DownloadButtonTrends2 <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators-trends2", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(
+      dt_trend_plot2()
+      , file)
+  }
+)
+
+})
+
+
+```
+
+
+
+
+
+
+Change Over Time {#tab_changeovertime}
+===========================================================
+
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r sidebar-plot-1}
+# Select Indicator
+selectInput("ineq_indicator", 
+            label = "Indicator:",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "MLD", 
+              "Gini", 
+              "Decile1",
+              "Decile2",
+              "Decile3",
+              "Decile4",
+              "Decile5",
+              "Decile6",
+              "Decile7",
+              "Decile8",
+              "Decile9",
+              "Decile10",
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Gini")
+# Select initial year
+selectInput("initial_year",
+            label    = "Initial Year",
+            choices  = dt_pip$year |> unique() |> sort(),
+            selected = 2010,
+            multiple = FALSE)
+
+
+# Select initial year
+sliderInput("interval", 
+             label = "Interval Length: measure the change over how many years?",
+             min = 1, max = 10, value = 10, step = 1)
+
+# Select initial year
+sliderInput("window", 
+             label = "Circa years window",
+             min = 0, max = 5, value = 0, step = 1)
+
+selectInput(
+  "do_not_plot", 
+  label    = "Remove from plot", 
+  choices  = c(
+    pip_countries_regions$region_name |> 
+      sort() |> 
+      unique(), 
+    pip_countries |> 
+      sort() |> 
+      unique()
+  ), 
+  selected = NULL,
+  multiple = TRUE
+)
+
+
+downloadButtonRmd(
+  outputId = "DownloadButtonChange", 
+  label = "Download Data as CSV"
+)
+
+
+```
+
+Column {data-width=1100 .tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### 
+
+
+```{r data-filter-1}
+dt_use <- reactive({
+  
+  # Filter countries ----
+  deselected_countries <- c(
+    pip_countries_regions[
+      (country_name %chin% input$do_not_plot)
+    ]$country_name, 
+    pip_countries_regions[
+      (region_name %chin% input$do_not_plot)
+    ]$country_name
+  ) |> 
+    unique()
+  
+  dt_use <- dt_pip[
+    !(country_name %chin% deselected_countries)
+  ]
+  
+  dt_use <- create_data_imputed_by_countries_two_years(
+    dt = dt_use, 
+    countries_selected  = pip_countries, 
+    year1_selected      = as.numeric(input$initial_year), 
+    year2_selected      = c(as.numeric(input$initial_year) + as.numeric(input$interval)),
+    indicator           = input$ineq_indicator, 
+    window_length       = input$window 
+)
+  
+})
+
+```
+
+```{r plot1}
+renderPlotly({
+dt1 <- dt_use()
+dt1[
+  , 
+  MeanWelfare := round(MeanWelfare, 2)
+]
+# dt1[
+#   , 
+#   text_tooltip := (
+#     paste0(
+#       "Economy: ", "\n",
+#       "Initial ", input$ineq_indicator, ": ", "\n",
+#       "Annualized Change: "
+#     )
+#   )
+# ]
+# Initialize ggplot object
+p <- ggplot(data = dt1) +
+  theme_classic() +
+  labs(
+    title = paste("Change in", input$ineq_indicator, "from circa", as.numeric(input$initial_year), "to circa", as.numeric(input$initial_year) + as.numeric(input$interval)),
+    subtitle = paste("Economies ordered from highest to lowest by initial", input$ineq_indicator),
+    x = title_function(input$ineq_indicator),
+    y = ""
+  ) + 
+  theme(legend.position = "none")
+
+# Add point layer first to avoid overlap
+p <- p +
+  geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor, text = text_tooltip), size = 2)
+
+# Add segment layer with arrow
+p <- p +
+  geom_segment(
+    aes(
+      x     = Indicator1,
+      xend  = Indicator2,
+      y     = country_name,
+      yend  = country_name,
+      color = ChangeColor
+    ), 
+    arrow = arrow(length = unit(0.5, "inches"), type = "closed")
+  )
+
+# Conditional logic for color scales
+if(input$ineq_indicator %chin% c("Mean", "Median")){
+  p <- p + 
+    scale_color_manual(values = c("Negative" = "#1b9e77", "Positive" = "#d95f02"))
+} 
+if(input$ineq_indicator %chin% c(paste0("Decile", 1:10))){
+    p <- p + 
+    scale_color_manual(values = c("Negative" = "#9ecae1", "Positive" = "#3182bd"))
+}else {
+  p <- p + 
+    scale_color_manual(values = c("Negative" = "#d95f02", "Positive" = "#1b9e77"))
+}
+
+
+# Convert to plotly object
+pp <- ggplotly(p, tooltip = "text")
+
+pp <- pp |> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.03,
+            sizex = 0.15,
+            sizey = 0.15,
+            opacity = 0.8
+       )), 
+       annotations = 
+                 list(
+                   x = 0, 
+                   y = -0.065, 
+                   text = source_text, 
+                   showarrow = F, 
+                   xref='paper', 
+                   yref='paper', 
+                   font=list(size=6, color="grey")
+                   ))
+
+
+
+
+
+# Display the plot
+pp
+})
+
+reactive({
+  
+dt <- dt_use()
+dt <- dt[
+  ,
+  .(country_name, year, region_name, Indicator1, AnnualizedChange)
+]
+setnames(
+  dt, 
+  old = c("country_name", "year", "region_name", "Indicator1", "AnnualizedChange"), 
+  new = c("Country", "Year", "Region", str_to_title(input$ineq_indicator), "Annualized_Change")
+)
+# setnames(
+#   dt, 
+#   old = c("IndicatorX", "IndicatorY"), 
+#   new = c(input$ineq_indicatorX, input$ineq_indicatorY)
+# )
+output$DownloadButtonChange <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators-change", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(
+      dt
+      , file)
+  }
+)
+
+})
+
+
+```
+
+
+
+
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Explanation of the chart
+
+<!-- go to the [definitions page](#definitions) -->
+<!-- go to [Definitions](#Definitions) -->
+<!-- go to [About](#About) -->
+<!-- go to [both](#AboutDefinitions) -->
+<!-- go to [both](#AboutDefs) -->
+
+
+```{r}
+
+p("This plot shows the change in the selected indicator over time for economies where there is comparable survey data in the chosen period. The ", strong("dot", style = "color:black"), " gives the initial indicator value for that economy The ", strong("horizontal line segment", style = "color:black"), " connects the initial and final year indicator values. The ", strong("color", style = "color:black"), " indicates whether a economy's outcomes improve over the chosen interval. When mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has worsened. The economies on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.")
+
+
+
+
+h4("What if an economy has no surveys in the chosen years?")
+
+p("Users specify the initial year (e.g., 2000) and the period over which they would like to study the change (e.g., the interval length is 5 years for looking at the 2000-2005 period).")
+
+p("Data might be missing for some economies for specific years. To increase the number of economies available, users can specify a circa year window. For example, if the chosen circa window is 2, then data 2 years either side of 2000 are considered (i.e., between 1998 and 2002). Within the circa window, data points in the initial and final years are selected with a preference for closer and newer data points: For example, if data for 2000 is missing, the algorithm will first look for data in 2001 and if 2001 data is also missing, it will then search in 1999. If both are missing, it will look for data in 2002 and 1998. An equivalent process is applied to the final year.")
+
+p("With a circa window larger than zero, the duration over which changes are measured differs across economies. For example, with an interval of 5 years and a window of 2, the duration varies between 1 year and 9 years (e.g. 2002-2003 and 1998-2007 are both permissible).")
+
+
+
+
+```
+
+Scatterplot of Indicators
+===========================================================
+
+
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r sidebar-plot-2}
+# Select Indicator
+selectInput("ineq_indicatorX", 
+            label = "Indicator x-axis:",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "MLD", 
+              "Gini", 
+              "Decile1",
+              "Decile2",
+              "Decile3",
+              "Decile4",
+              "Decile5",
+              "Decile6",
+              "Decile7",
+              "Decile8",
+              "Decile9",
+              "Decile10",
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Mean")
+# Select Indicator
+selectInput("ineq_indicatorY", 
+            label = "Indicator y-axis:",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "MLD", 
+              "Gini", 
+              "Decile1",
+              "Decile2",
+              "Decile3",
+              "Decile4",
+              "Decile5",
+              "Decile6",
+              "Decile7",
+              "Decile8",
+              "Decile9",
+              "Decile10",
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected = "Gini")
+
+
+selectInput( "select_welfare_type", 
+              label = "Survey Type:", 
+              choices = c("Both", "Consumption", "Income"), 
+              selected = "Both"
+)
+
+checkboxGroupInput(
+  inputId  = "log_transformations", 
+  label    = "Log Transformations:", 
+  choices  = c("Y axis", "X axis"), 
+  selected = NULL
+)
+
+
+
+selectInput("countries_selected",
+            label    = "Select economies",
+            choices  = c(
+              "All", 
+              dt_pip$region_name |> 
+                unique() |> 
+                sort(), 
+              pip_countries
+            ),
+            selected = "All",
+            multiple = TRUE)
+# Select region for scatter plot to highlight
+selectInput("background_regions",
+            label    = "Select comparison economies",
+            choices  = c(
+              "All", 
+              dt_pip$region_name |> 
+                unique()
+            ),
+            selected = "",
+            multiple = TRUE)
+radioButtons("color_by", 
+                   label = "Color points by:",  
+                   choices = c(
+                     "Region", 
+                     "Income group"
+                   ), 
+                   selected = c("Region"))
+
+radioButtons("all_years_scatterplot", 
+                   label = "Select years to plot",  
+                   choices = c(
+                     "All", 
+                     "Custom"
+                   ), 
+                   selected = c("All"))
+
+conditionalPanel(
+  condition = "input.all_years_scatterplot == 'Custom'",
+  selectInput("select_initial_year_scatterplot", 
+              label = "Initial Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                min(), 
+              multiple = FALSE)
+)
+
+conditionalPanel(
+  condition = "input.all_years_scatterplot == 'Custom'",
+  selectInput("select_final_year_scatterplot", 
+              label = "Final Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                max(), 
+              multiple = FALSE)
+)
+
+observeEvent(input$select_initial_year_scatterplot, 
+             {
+               updated_choices <- dt_pip[
+                 year > as.numeric(input$select_initial_year_scatterplot), 
+                 unique(year)
+               ]
+               updated_choices <- sort(updated_choices)
+               updateSelectInput(
+                 session, 
+                 "select_final_year_scatterplot", 
+                 choices = updated_choices, 
+                 selected = dt_pip$year |> max() 
+               )
+})
+
+```
+Advanced Features:
+```{r}
+checkboxInput("add_line", 
+              label = "Add fitted line", 
+              value = FALSE)
+
+
+downloadButtonRmd(
+  outputId = "DownloadButtonScatterplot", 
+  label = "Download Data as CSV"
+)
+
+```
+
+
+Column {data-width=1100 .tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+```{r data-filter2}
+
+
+
+selected_countries <- reactive({
+    
+  # get list of selected countries
+  if(c("All") %chin% input$countries_selected){
+    
+    selected_countries <- dt_pip$country_name |> unique()
+    
+  } else {
+    
+    selected_countries <- c(
+    (pip_countries_regions[country_name %chin% input$countries_selected])$country_name, 
+    (pip_countries_regions[region_name %chin% input$countries_selected])$country_name
+  ) |> unique()
+    
+  }
+  
+  
+    # welfare
+  if(!input$select_welfare_type == c("Both")){
+    selected_countries <- intersect(
+      selected_countries, 
+      dt_pip[welfare_type == tolower(input$select_welfare_type)]$country_name
+    ) |> unique()
+  }else {
+    selected_countries
+  }
+  
+  
+})
+
+
+dt_use_sp <- reactive({
+  
+  # Copy pip stats
+  dt_use_sp <- copy(dt_pip)
+  
+  # filter years
+  if(input$all_years_scatterplot == "Custom"){
+    
+    dt_use_sp <- dt_use_sp[
+      year >= input$select_initial_year_scatterplot & 
+        year <= input$select_final_year_scatterplot
+    ]
+    
+  }
+  
+  
+  # Keep selected and background countries
+  if(
+    ! any(
+      c(
+        "All" %chin% input$countries_selected, 
+        "All" %chin% input$background_regions
+      )
+    )
+  ){
+    
+    # which countries to keep in data
+    countries_filtered <- c(
+      selected_countries(), 
+      pip_countries_regions[
+        region_name %chin% input$background_regions
+      ]$country_name
+    )
+    
+    # filter
+    dt_use_sp <- dt_use_sp[
+      country_name %chin% countries_filtered
+    ]
+    
+    
+  }
+  
+  # Change names of selected indicators
+  
+  ineq_indic_X <- input$ineq_indicatorX |> str_replace_all(" ", "_") |> str_to_lower()
+  ineq_indic_Y <- input$ineq_indicatorY |> str_replace_all(" ", "_") |> str_to_lower()
+  
+  setnames(
+    x = dt_use_sp, 
+    old = c(ineq_indic_X, ineq_indic_Y), 
+    new = c("IndicatorX", "IndicatorY")
+  )
+  
+  dt_use_sp[
+    , 
+    Region := region_code
+  ]
+  dt_use_sp[
+    , 
+    `Income Group` := incgroup_current
+  ]
+  # factor(incgroup_current, levels = incgroup_current[order(mean)])]
+  # Define tooltip
+  dt_use_sp[
+    , 
+    text_tooltip := (
+      paste0(
+        "Economy: ", country_name, "\n",
+        "Region: ", region_name,  "\n",
+        "Income Group: ", incgroup_current, "\n",
+        input$ineq_indicatorX, ": ", round(IndicatorX,2),  "\n",
+        input$ineq_indicatorY, ": ", round(IndicatorY, 2),  "\n",
+        "Survey type: ", str_to_title(welfare_type)
+      )
+    )
+  ]
+  
+
+
+
+    })
+
+
+```
+
+### 
+
+```{r plot2}
+
+renderPlotly({
+
+
+transformation_x <- function(x){
+  
+  if("X axis" %chin% input$log_transformations){
+    log(x)
+  } else{
+    x
+  }
+  
+}
+
+transformation_y <- function(x){
+  
+  if("Y axis" %chin% input$log_transformations){
+    log(x)
+  } else{
+    x
+  }
+}
+# define tooltip ----
+dt <- dt_use_sp()
+# setnames(
+#   dt, 
+#   old = c("incgroup_current"), 
+#   new = c("Income Group")
+# )
+# Initialize ggplot object
+sp1 <- ggplot(dt) +
+  labs(
+    title = paste("Relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
+    x = title_function(input$ineq_indicatorX),
+    y = title_function(input$ineq_indicatorY)
+  )+
+  scale_color_brewer(palette = "Dark2")
+
+# Add geom_point
+if(input$color_by == "Region"){
+  
+  sp1 <- sp1 +
+  geom_point(aes(
+    x = transformation_x(IndicatorX),
+    y = transformation_y(IndicatorY),
+    color = Region, 
+    text = text_tooltip
+  ))
+  
+} else{
+    sp1 <- sp1 +
+  geom_point(aes(
+    x = transformation_x(IndicatorX),
+    y = transformation_y(IndicatorY),
+    color = `Income Group`, 
+    text = text_tooltip
+  ))
+  
+  
+}
+
+
+# Add geom_smooth if required
+if (input$add_line == TRUE) {
+  sp1 <- sp1 +
+    geom_smooth(
+      aes(
+        x = transformation_x(IndicatorX),
+        y = transformation_y(IndicatorY),
+        stat = "smooth",
+        position = "identity"
+      )
+    )
+}
+# 
+# Adjust theme
+sp1 <- sp1 + theme_classic()
+#   
+# if log transform, use original units
+  if(c("X axis" %chin% input$log_transformations)){
+    
+      if(input$ineq_indicatorX == "Mean"){
+        sp1 <- sp1 + 
+          scale_x_log10(
+            labels = function(x) round(exp(x), 0), 
+            limits = c(log(1.1), log(94))
+          )
+      } else{
+        sp1 <- sp1 + 
+          scale_x_log10(
+            labels = function(x) round(exp(x), 0)
+          )
+      }
+  
+  }
+  if(c("Y axis" %chin% input$log_transformations)){
+    
+      if(input$ineq_indicatorY == "Mean"){
+        sp1 <- sp1 + 
+          scale_y_log10(
+            labels = function(x) round(exp(x), 0), 
+            limits = c(log(1.1), log(94))
+          )
+      } else{
+        sp1 <- sp1 + 
+          scale_y_log10(
+            labels = function(x) round(exp(x), 0)
+          )
+      }
+  
+  }
+# input$background_regions
+#   
+if(!is.null(input$background_regions)){
+  
+  #   # Highlight countries
+  sp1 <- sp1 +
+    gghighlight(
+      country_name %chin% selected_countries(),
+      unhighlighted_params = list(color = "lightgrey")
+    )
+     
+  
+}
+
+#sp1 <- sp1 +
+  # Here comes the gganimate specific bits
+  #labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'life expectancy') +
+  # transition_time(year) +
+  # ease_aes('linear')
+
+# Convert to plotly object
+sp1_plotly <- ggplotly(sp1, tooltip = "text")
+
+
+
+# Display the plot
+sp1_plotly <- sp1_plotly |>
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= -0.03,
+            sizex = 0.15,
+            sizey = 0.15,
+            opacity = 0.8
+       )),
+       annotations =
+                 list(
+                   x = 0,
+                   y = -0.065,
+                   text = source_text,
+                   showarrow = F,
+                   xref='paper',
+                   yref='paper',
+                   font=list(size=6, color="grey")
+                   ))
+
+sp1_plotly #|> 
+ # animation_opts()
+
+
+})
+
+
+reactive({
+  
+dt <- dt_use_sp()
+dt <- dt[
+  , 
+  .(country_name, region_name, IndicatorX, IndicatorY)
+]
+setnames(
+  dt, 
+  old = c("IndicatorX", "IndicatorY"), 
+  new = c(input$ineq_indicatorX, input$ineq_indicatorY)
+)
+output$DownloadButtonScatterplot <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators-scatterplot", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(
+      dt
+      , file)
+  }
+)
+
+})
+
+
+```
+
+
+
+
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+### Explanation of the chart
+
+```{r}
+
+
+p("This scatterplot shows the relationship between two selected indicators. By default, it shows all data, regardless of economy, region, or whether welfare is measured by consumption or income. Making selections on the side panel will limit the display to the selected data (e.g. selecting SSA as the region and consumption as the welfare measure plots data for Sub-Saharan Africa where welfare is measured by consumption). The selected data can be compared against other economies or regions. Dots are colored by region.")
+
+p("The plot provides a feature for incorporating a line to depict the underlying relationship between variables. This line represents the conditional mean, estimated via locally estimated scatterplot smoothing (LOESS), and is accompanied by 95% confidence intervals.")
+
+
+
+
+
+```
+
+
+
+
+
+Table of Indicators
+===========================================================
+
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r sidebar-table-1}
+
+# Select Indicator
+checkboxGroupInput("ineq_indicator_table", 
+            label = "Indicators:",
+            choices = c(
+              "Mean", 
+              "Median", 
+              "Gini",
+              "MLD",
+              "Decile Shares",
+              "Top 10 Bottom 40 Ratio", 
+              "Top 20 Bottom 20 Ratio"
+            ),
+            selected =  c(
+              "Mean", 
+              "Gini",
+              "Top 10 Bottom 40 Ratio"
+            ))
+
+
+selectInput("select_countries_table", 
+            label = "Economies:",
+            choices = c(
+              "All", 
+              dt_pip$region_name |> 
+                unique() |> 
+                sort(),  
+              pip_countries
+            ),
+            selected = c("All"), 
+            multiple = TRUE)
+
+
+
+radioButtons("all_years_table", 
+                   label = "Years shown in table",  
+                   choices = c(
+                     "Latest", 
+                     "All", 
+                     "Custom"
+                   ), 
+                   selected = c("Latest"))
+
+
+conditionalPanel(
+  condition = "input.all_years_table == 'Custom'",
+  selectInput("select_initial_year_table", 
+              label = "Initial Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                min(), 
+              multiple = FALSE)
+)
+
+conditionalPanel(
+  condition = "input.all_years_table == 'Custom' && input.select_initial_year_table != null",
+  selectInput("select_final_year_table", 
+              label = "Final Year:",
+              choices = dt_pip$year |> 
+                unique() |> 
+                sort(),
+              selected = dt_pip$year |> 
+                max(), 
+              multiple = FALSE)
+)
+
+observeEvent(input$select_initial_year_table, 
+             {
+               updated_choices <- dt_pip[
+                 year > as.numeric(input$select_initial_year_table), 
+                 unique(year)
+               ]
+               updated_choices <- sort(updated_choices)
+               updateSelectInput(
+                 session, 
+                 "select_final_year_table", 
+                 choices = updated_choices, 
+                 selected = dt_pip$year |> max() 
+               )
+})
+
+
+# Render download button
+#downloadButton("downloadData", "Download CSV")
+
+downloadButtonRmd(
+  outputId = "DownloadButtonTable", 
+  label = "Download Data as CSV"
+)
+
+
+```
+
+
+
+
+Row {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### 
+
+```{r plot-table}
+
+
+make_table_across_countries <- function(
+    dt,
+    country_name_vec = c("Angola", "South Africa"),
+    ineq_indicators  = c(
+      "Mean",
+      "Median",
+      "MLD",
+      "Gini",
+      "Decile1",
+      "Decile2",
+      "Decile3",
+      "Decile4",
+      "Decile5",
+      "Decile6",
+      "Decile7",
+      "Decile8",
+      "Decile9",
+      "Decile10",
+      "Top_10_bottom_40_ratio",
+      "Top_20_bottom_20_ratio"
+    ),
+    years_selected = c("All", "Latest", "Custom"), 
+    start_year = NULL, 
+    end_year = NULL
+){
+  dt <- copy(dt)
+  # Check Inputs ----
+  stopifnot(is.data.table(dt))
+  stopifnot(country_name_vec %chin% pip_countries)
+  years_selected <- match.arg(years_selected)
+
+  # If decile shares is selected
+  if(c("Decile Shares") %chin% ineq_indicators ){
+    # remove "Decile Shares" element
+    ineq_indicators <- ineq_indicators[!c("Decile Shares") %chin% ineq_indicators]
+    # add all individual decile shares
+    ineq_indicators <- c(
+      ineq_indicators, 
+      paste0("decile", 1:10)
+    )
+  }
+  
+  # Prepare Data ----
+  selected_cols <- c(
+    "Country",
+    "Region",
+    "Year",
+    "Reporting_level",
+    "Welfare_type",
+    "Comparable_spell",
+    ineq_indicators
+  )
+  selected_cols <- 
+    selected_cols |> 
+    str_replace_all(" ", "_") |> 
+    str_to_lower() |> 
+    str_to_title()
+  
+  setnames(
+    dt,
+    old = c("country_name", "region_name"),
+    new = c("country", "region")                           # Clean variable names
+  )
+  setnames(
+    dt,
+    stringr::str_to_title(names(dt))             # Capitalize column names
+  )
+  
+  
+  dt <- dt[
+    Country %chin% country_name_vec,         # filter by country
+    ..selected_cols                             # Select id vars and inequality indicators
+  ]
+  
+  dt[
+    ,
+    (names(dt)) := lapply(                       # Round to 2 decimals
+      .SD,
+      \(x){
+        if (is.numeric(x)) 
+          round(x, 2) 
+        else 
+          x
+        }
+    )
+  ]
+  
+  
+  # Filter years
+  if(years_selected == "Latest"){
+    dt <- dt[, 
+             .SD[which.max(Year)], 
+             by = Country]
+  }
+  if(years_selected == "Custom"){
+
+    if(start_year > end_year)
+      stop("Please note the initial year must be lower than the final year")
+    dt <- dt[
+      Year >= start_year &
+        Year <= end_year
+    ]
+
+  }
+  
+  
+  setorder(dt, Country, Region, -Year, Reporting_level, Welfare_type)
+  
+  setnames(
+    dt, 
+    old = c("Welfare_type"), 
+    new = c("Survey_type")
+  )
+  if("Mld" %chin% names(dt)){
+    setnames(
+      dt, 
+      old = "Mld", 
+      new = "MLD"
+    )
+  }
+  
+  dt # return
+} # end of make_table_across_countries()
+
+
+
+table <-
+  reactive({
+    
+    # Filter countries
+    
+    ct <- 
+      if ("All" %chin% input$select_countries_table) {
+      pip_countries
+    } else {
+      c(pip_countries_regions[country_name %chin%
+                                input$select_countries_table]$country_name,
+        pip_countries_regions[region_name %chin%
+                                input$select_countries_table]$country_name
+        ) |>
+        unique()
+    }
+    
+    make_table_across_countries(
+      dt               = dt_pip,
+      country_name_vec = ct,
+      ineq_indicators  = input$ineq_indicator_table,
+      years_selected   = input$all_years_table, 
+      start_year       = input$select_initial_year_table, 
+      end_year         = input$select_final_year_table
+  )
+})
+
+  
+
+renderPlotly({
+  
+list_of_columns <- lapply(
+    names(table()), 
+    \(col_name) { # Make the columns list items for plotly
+      return(table()[[col_name]])
+    })
+  
+  # plot table
+  t <- plot_ly(
+    type = 'table',
+    #columnwidth = c(100, 100),
+    header = list(
+      values = table() |> 
+        colnames() |> 
+        # column names vector
+        str_replace_all(pattern = "_", 
+                        replacement = " "), 
+      align = "center",
+      line = list(width = 1, color = 'black'),
+      fill = list(color = c("grey", "grey")),
+      font = list(family = "Arial", size = 14, color = "white")
+    ),
+    cells = list(
+      values = list_of_columns,
+      align  = c("center", "center"),
+      line   = list(color = "black", width = 1),
+      font   = list(family = "Arial", size = 12, color = c("black"))
+    ))
+  
+t <- layout(
+  t,
+  title   = "PIP Key Inequality Indicators, Selected Economies and Years",
+  titlefont = list(color = 'black'), 
+  title_x = 0 
+)
+  
+ t <- t |> 
+   layout(
+     images = list(
+       list(
+         source = base64enc::dataURI(file = "Logo/logo_horizontal.png"),
+             xref = "paper",
+            yref = "paper",
+            x= 0.8,
+            y= 0,
+            sizex = 0.15,
+            sizey = 0.15,
+            opacity = 0.8
+       )), 
+       annotations = 
+                 list(
+                   x = 0, 
+                   y = -0.05, 
+                   text = source_text, 
+                   showarrow = F, 
+                   xref='paper', 
+                   yref='paper', 
+                   font=list(size=6, color="grey")
+                   ))
+  
+})
+
+
+output$DownloadButtonTable <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators-table", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(table(), file)
+  }
+)
+
+
+
+```
+
+
+
+About and Definitions {#tab_about}
+===========================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### About {#About}
+
+
+This dashboard provides a set of interactive visualizations focused on within-country inequality. The data are from the [Poverty and Inequality Platform (PIP)](https://pip.worldbank.org/home), which is the source of the World Bank’s estimates of poverty and inequality. 
+
+The estimates are based on country-level household survey unit record data or grouped data. Survey data are the most widely available source of information on distributions of income or consumption. However, research on some countries has shown that surveys tend to underestimate the income of the richest, for which no corrections have been made in these estimates. 
+
+From the survey, a measure of household welfare is constructed, capturing either household income or consumption. There are important differences between the two concepts; in particular, inequality in incomes is systematically greater than inequality in consumption. Countries in Europe and Central Asia, Latin America and the Caribbean, the Other High Income group tend to use income surveys, while the rest of the world uses consumption. Users are advised to take these differences into account, especially when comparing levels of inequality across countries and regions.
+
+Changes in questionnaire design imply that estimates of poverty and inequality within countries become incomparable. Whenever such changes occur, a break is shown in the inequality trend. The visualization of changes over time only includes countries that have a [comparable](https://datanalytics.worldbank.org/PIP-Methodology/welfareaggregate.html#comparability) survey spell over the period chosen.
+
+The term country, used interchangeably with economy, does not imply political independence but refers to any territory for which authorities report separate social or economic statistics.
+
+For more details on the methodology, please visit the [PIP Methodology Handbook](https://datanalytics.worldbank.org/PIP-Methodology/) and the [Global Poverty Monitoring Technical Notes](https://pip.worldbank.org/publication). For any questions regarding the data or methodology, please contact pip@worldbank.org.
+
+Please cite the data as:  World Bank. (2023). Poverty and Inequality Platform (version 20230919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessed `r today()`. 
+
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Definitions {#Definitions}
+
+<span class="underline">Inequality indicators:</span>
+
+\newline
+
+The **Gini** index ranges from 0 (perfect equality) to 100 (complete inequality). The **mean log deviation (MLD)** belongs to the family of generalized entropy inequality measures. The MLD has a minimum value of 0 (perfect equality) and has no upper bound. The Gini index is especially sensitive to changes around the middle of the distribution, while the MLD is more sensitive to changes at the bottom. The **decile shares** focus on particular parts of the distribution of income or consumption: Households are first ordered according to their welfare per capita, such that the first decile contains the 10% of the population with the lowest welfare and so on. Decile shares measure the share of total welfare belonging to each decile. The **top 10 to bottom 40 ratio** (also known as the Palma ratio) compares the welfare share of the richest tenth of the population to the poorest 40 percent. Similarly, the **top 20 to bottom 20 ratio** is the share of the richest quintile to the poorest quintile. More details on the definition of the indicators can be found [here](https://datanalytics.worldbank.org/PIP-Methodology/surveyestimates.html#inequality). 
+
+<span class="underline">Other variables:</span>
+
+\newline
+
+The **mean** refers to average daily household per capita income or consumption in 2017 PPP USD. Purchasing power parity (PPP) conversion factors are used to adjust for price differences across countries. Similarly, the **median** refers to the median daily household per capita income or consumption in 2017 PPP USD. 
+The **year** variable is the starting year of the household survey. In some countries, the data collection spans multiple years. When looking at changes over time, users can select **circa years** (i.e., a window around the chosen year). This increases the sample of countries available, since not all countries have annual household surveys, as explained in more detail on the chart page.
+
+Countries can also be grouped by **region**. The dashboard uses PIP’s [regional definition](https://datanalytics.worldbank.org/PIP-Methodology/lineupestimates.html#regionsandcountries) which differs from the regional classifications used by the World Bank. Some high-income economies are excluded from the geographical regions and are included as a separate group referred to as “other high income”.
+
+
