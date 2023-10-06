@@ -1,21 +1,35 @@
 ---
-title: ' PIP Key Inequality Indicators'
+title: 'Key Inequality Indicators'
 output:
   flexdashboard::flex_dashboard:
     orientation: columns
     social: menu
     theme: paper
-    source_code: embed
-    vertical_layout: fill
+      # version: 4
+      # #primary: "#FFF"
+      # #navbar-bg: "#22A6F5"
+      # base_font: 
+      #   google: Lato
+      # heading_font:
+      #   google: Lato
+      # code_font:
+      #   google: 
+      #     # arguments to sass::font_google() 
+      #     family: Lato
+      #     local: false
 runtime: shiny
 resource_files:
 - data/CLASS.dta
 - data/CLASS.dta
 ---
 
+
 ```{r}
 htmltools::includeHTML("custom_header.html")
+
 ```
+
+
 
 
 ```{r setup-packages, include=FALSE}
@@ -28,7 +42,8 @@ library("flexdashboard")
 library("joyn")
 library("gghighlight")
 library("DT")
-# library("RColorBrewer")
+library("zoo")
+library("RColorBrewer")
 ```
 
 ```{r setup-data, include=FALSE}
@@ -180,7 +195,6 @@ create_data_imputed_by_countries <- function(
     countries_selected  = c("South Africa", "Colombia", "United States"), 
     year_selected       = 1998, 
     indicator           = c("Gini"), 
-    welfare             = NULL, # if 'consumption' or 'income' then use *only* those
     window_length       = 2 
     
 ){
@@ -211,14 +225,6 @@ create_data_imputed_by_countries <- function(
     new     = c("Indicator")
   )
   
-  # Filter ----
-  if( !is.null(welfare) ) { # welfare type
-    
-    dt_use <- dt_use[
-      welfare %chin% welfare_type
-    ]
-    
-  }
   
   # Filter by year and country name
   dt_use <- dt_use[        # window length
@@ -302,6 +308,20 @@ dt_use <- joyn::merge(
     Indicator
   }, by = country_name]
   
+   # Do imputation of comparable spells
+  dt_use[, 
+         survey_comparability := {
+    # Forward fill for Impute_Forward == FALSE
+    survey_comparability[Impute_Forward == FALSE] <- na.locf(
+      survey_comparability[Impute_Forward == FALSE])
+    # Backward fill for Impute_Forward == TRUE
+    survey_comparability[Impute_Forward == TRUE] <- na.locf(
+      survey_comparability[Impute_Forward == TRUE], 
+             fromLast=TRUE)
+    # Return the modified Indicator
+    survey_comparability
+  }, by = country_name]
+  
   # Years over which change occurs
   dt_use[
     , 
@@ -337,9 +357,7 @@ create_data_imputed_by_countries_two_years <- function(
     year1_selected      = 1998, 
     year2_selected      = 2005,
     indicator           = c("Gini"), 
-    welfare             = NULL, # if 'consumption' or 'income' then use *only* those
     window_length       = 2 
-    
 ){
   dt_use <- copy(dt)
   dt_use <- dt_use[, MeanWelfare := mean]
@@ -349,7 +367,6 @@ create_data_imputed_by_countries_two_years <- function(
     countries_selected = countries_selected, 
     year_selected      = year1_selected, 
     indicator          = indicator, 
-    welfare            = welfare, 
     window_length      = window_length
   )
   indicator <- indicator |> str_replace_all(" ", "_") |> str_to_lower()
@@ -359,7 +376,7 @@ create_data_imputed_by_countries_two_years <- function(
     old = c(tolower(indicator), "ImputeYears", "Impute_Forward"), 
     new = c("Indicator1", "ImputeYears1", "Impute_Forward1")
   )
-  dt1 <- dt1[, .(country_name, year, Indicator1, MeanWelfare, ImputeYears1, Impute_Forward1)]
+  dt1 <- dt1[, .(country_name, year, Indicator1, MeanWelfare, ImputeYears1, Impute_Forward1, survey_comparability)]
 
   # Data in Year 2
   dt2 <- create_data_imputed_by_countries(
@@ -367,7 +384,6 @@ create_data_imputed_by_countries_two_years <- function(
     countries_selected = countries_selected, 
     year_selected      = year2_selected, 
     indicator          = indicator, 
-    welfare            = welfare, 
     window_length      = window_length
   )
   setnames(
@@ -375,15 +391,15 @@ create_data_imputed_by_countries_two_years <- function(
     old = c(tolower(indicator), "ImputeYears", "Impute_Forward"), 
     new = c("Indicator2", "ImputeYears2", "Impute_Forward2")
   )
-  dt2 <- dt2[, .(country_name, year, Indicator2, ImputeYears2, Impute_Forward2, region_name)]
+  dt2 <- dt2[, .(country_name, year, Indicator2, ImputeYears2, Impute_Forward2, region_name, survey_comparability)]
   
   # Join the two years
   dt_use <- joyn::merge(
     dt1, 
     dt2, 
-    keep = "left", 
+    keep = "inner", 
     match_type = "1:1", 
-    by = "country_name"
+    by = c("country_name", "survey_comparability")
   )
   
   # Find the change in indicator
@@ -417,7 +433,8 @@ create_data_imputed_by_countries_two_years <- function(
   dt_use[, AnnualizedChange := Change/ChangeYears]
   dt_use[, Change := abs(Change)]
   dt_use[, country_name := factor(country_name, levels = country_name[order(Indicator1)])]
-  dt_use <- na.omit(dt_use)
+  
+  #dt_use <- na.omit(dt_use)
   
   # Define tooltip
   dt_use[
@@ -447,7 +464,7 @@ Trends {#tab_trends}
 
 
 
-Sidebar {.sidebar data-width=250}
+Sidebar {.sidebar data-width=200}
 -----------------------------------------------------------------------
 
 ```{r sidebar-plot-3}
@@ -509,7 +526,7 @@ checkboxInput("log_y_3_fig2",
 selectInput("countries_selected_3",
             label    = "Select economies to plot",
             choices  = c(dt_pip$country_name |> unique() |> sort()),
-            selected = c("Colombia", "Ghana", "Argentina", "Thailand"),
+            selected = c("Colombia", "Ghana", "Thailand"),
             multiple = TRUE)
 
 
@@ -564,7 +581,7 @@ observeEvent(input$select_initial_year_plot,
 
 downloadButtonRmd(
   outputId = "DownloadButtonTrends2", 
-  label = "Download Data as CSV"
+  label = "CSV"
 )
 
 ```
@@ -688,16 +705,6 @@ dt[
 
 # Initialize ggplot object
 tp1 <- ggplot(dt) +
-  labs(
-    title = paste(
-      "Figure 1:", 
-      input$ineq_indicatorY_3_fig1, 
-      "over time"
-    ), 
-    subtitle = "Selected Economies", 
-    x = "", 
-    y = title_function(input$ineq_indicatorY_3_fig1)
-  ) +
   theme_classic() +
   theme(legend.position = "none")
 
@@ -710,8 +717,8 @@ if(input$log_y_3_fig1 == TRUE){
 
 # Add geom_point and geom_line
 tp1 <- tp1 +
-  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2.5) +
-  geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  geom_line(aes(x = round(year), y = transformation(IndicatorY), color = country_name, group = comparable_spell), alpha = 0.8)  + 
+  geom_point(aes(x = round(year), y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2, alpha = 0.9) +
   scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))+
   scale_color_brewer(palette = "Dark2")
 
@@ -739,23 +746,42 @@ dt_trend_plotly <- dt_trend_plotly |>
              xref = "paper",
             yref = "paper",
             x= 0.8,
-            y= -0.035,
+            y= -0.075,
             sizex = 0.15,
             sizey = 0.15,
             opacity = 0.8
-       )
-       ), 
+       )), 
        annotations = 
                  list(
                    x = 0, 
-                   y = -0.05, 
+                   y = -0.1, 
                    text = source_text, 
                    showarrow = F, 
                    xref='paper', 
                    yref='paper', 
                    font=list(size=6, color="grey")
-                   )
-       )
+                   ))
+
+dt_trend_plotly <- layout(dt_trend_plotly, 
+            title = list(
+              text = paste("Figure 1:", input$ineq_indicatorY_3_fig1, "over time"),
+              titlefont = list(
+                size = 14
+              )
+              ),
+            titlefont = list(
+              color = 'black', 
+              size  = 14
+            ),
+            xaxis = list(
+              title = ""
+            ),
+            yaxis = list(
+              title = title_function(input$ineq_indicatorY_3_fig1), 
+              titlefont = list(size  = 12)
+            )
+)
+
 dt_trend_plotly
 
 })
@@ -796,12 +822,12 @@ dt[
 
 # Initialize ggplot object
 tp1 <- ggplot(dt) +
-  labs(
-    title = paste("Figure 2:", input$ineq_indicatorY_3_fig2, "over time"), 
-    subtitle = "Selected Economies", 
-    x = "", 
-    y = title_function(input$ineq_indicatorY_3_fig2)
-  ) +
+  # labs(
+  #   title = paste("Figure 2:", input$ineq_indicatorY_3_fig2, "over time"), 
+  #   subtitle = "Selected Economies", 
+  #   x = "", 
+  #   y = title_function(input$ineq_indicatorY_3_fig2)
+  # ) +
   theme_classic() +
   theme(legend.position = "none")
 
@@ -814,8 +840,8 @@ if(input$log_y_3_fig2 == TRUE){
 
 # Add geom_point and geom_line
 tp1 <- tp1 +
-  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2.5) +
-  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), size = 1)  + 
+  geom_line(aes(x = year, y = transformation(IndicatorY), color = country_name, group = comparable_spell), alpha = 0.8)  + 
+  geom_point(aes(x = year, y = transformation(IndicatorY), color = country_name, text = text_tooltip), size = 2, alpha = 0.9) +
   scale_x_continuous(expand = expand_scale(mult = c(0.1, 0.1)))+
   scale_color_brewer(palette = "Dark2")
 
@@ -841,7 +867,7 @@ dt_trend_plotly <- dt_trend_plotly |>
              xref = "paper",
             yref = "paper",
             x= 0.8,
-            y= -0.035,
+            y= -0.075,
             sizex = 0.15,
             sizey = 0.15,
             opacity = 0.8
@@ -849,14 +875,33 @@ dt_trend_plotly <- dt_trend_plotly |>
        annotations = 
                  list(
                    x = 0, 
-                   y = -0.05, 
-                   text =source_text, 
+                   y = -0.1, 
+                   text = source_text, 
                    showarrow = F, 
                    xref='paper', 
                    yref='paper', 
                    font=list(size=6, color="grey")
                    ))
 
+dt_trend_plotly <- layout(dt_trend_plotly, 
+            title = list(
+              text = paste("Figure 2:", input$ineq_indicatorY_3_fig2, "over time"),
+              titlefont = list(
+                size = 14
+              )
+              ),
+            titlefont = list(
+              color = 'black', 
+              size  = 14
+            ),
+            xaxis = list(
+              title = ""
+            ),
+            yaxis = list(
+              title = title_function(input$ineq_indicatorY_3_fig2), 
+              titlefont = list(size  = 12)
+            )
+)
 
 dt_trend_plotly
 
@@ -888,11 +933,11 @@ output$DownloadButtonTrends2 <- downloadHandler(
 
 
 
-Change Over Time {#tab_changeovertime}
+Change over Time
 ===========================================================
 
 
-Sidebar {.sidebar data-width=250}
+Sidebar {.sidebar data-width=200}
 -----------------------------------------------------------------------
 
 ```{r sidebar-plot-1}
@@ -954,16 +999,16 @@ selectInput(
 
 downloadButtonRmd(
   outputId = "DownloadButtonChange", 
-  label = "Download Data as CSV"
+  label = "csv"
 )
 
 
 ```
 
-Column {data-width=1100 .tabset .tabset-fade}
+Column {.tabset}
 -----------------------------------------------------------------------
 
-### 
+### Chart 
 
 
 ```{r data-filter-1}
@@ -1004,30 +1049,11 @@ dt1[
   , 
   MeanWelfare := round(MeanWelfare, 2)
 ]
-# dt1[
-#   , 
-#   text_tooltip := (
-#     paste0(
-#       "Economy: ", "\n",
-#       "Initial ", input$ineq_indicator, ": ", "\n",
-#       "Annualized Change: "
-#     )
-#   )
-# ]
+
 # Initialize ggplot object
 p <- ggplot(data = dt1) +
   theme_classic() +
-  labs(
-    title = paste("Change in", input$ineq_indicator, "from circa", as.numeric(input$initial_year), "to circa", as.numeric(input$initial_year) + as.numeric(input$interval)),
-    subtitle = paste("Economies ordered from highest to lowest by initial", input$ineq_indicator),
-    x = title_function(input$ineq_indicator),
-    y = ""
-  ) + 
   theme(legend.position = "none")
-
-# Add point layer first to avoid overlap
-p <- p +
-  geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor, text = text_tooltip), size = 2)
 
 # Add segment layer with arrow
 p <- p +
@@ -1039,8 +1065,16 @@ p <- p +
       yend  = country_name,
       color = ChangeColor
     ), 
-    arrow = arrow(length = unit(0.5, "inches"), type = "closed")
+    arrow = arrow(length = unit(0.5, "inches"), type = "closed"), 
+    alpha = 0.9
   )
+
+# Add point layer first to avoid overlap
+p <- p +
+  geom_point(aes(x = Indicator1, y = country_name, colour = ChangeColor, text = text_tooltip), size = 2, 
+    alpha = 0.9)
+
+
 
 # Conditional logic for color scales
 if(input$ineq_indicator %chin% c("Mean", "Median")){
@@ -1067,7 +1101,7 @@ pp <- pp |>
              xref = "paper",
             yref = "paper",
             x= 0.8,
-            y= -0.03,
+            y= -0.05,
             sizex = 0.15,
             sizey = 0.15,
             opacity = 0.8
@@ -1075,7 +1109,7 @@ pp <- pp |>
        annotations = 
                  list(
                    x = 0, 
-                   y = -0.05, 
+                   y = -0.1, 
                    text = source_text, 
                    showarrow = F, 
                    xref='paper', 
@@ -1083,7 +1117,29 @@ pp <- pp |>
                    font=list(size=6, color="grey")
                    ))
 
-
+pp <- layout(pp, 
+            title = list(
+              text = paste(
+                "Change in", 
+                input$ineq_indicator, 
+                "from circa", 
+                as.numeric(input$initial_year), 
+                "to circa", 
+                as.numeric(input$initial_year) + as.numeric(input$interval)
+              )
+            ),
+            titlefont = list(
+              color = 'black', 
+              size  = 14
+            ),
+            xaxis = list(
+              title = title_function(input$ineq_indicator), 
+              titlefont = list(size = 12)
+            ),
+            yaxis = list(
+              title = ""
+            )
+)
 
 
 
@@ -1126,12 +1182,9 @@ output$DownloadButtonChange <- downloadHandler(
 
 
 
+<p style='text-align:justify;'></p>
 
-
-Column {.tabset .tabset-fade}
------------------------------------------------------------------------
-
-### Explanation of the chart
+### Explanation
 
 <!-- go to the [definitions page](#definitions) -->
 <!-- go to [Definitions](#Definitions) -->
@@ -1140,32 +1193,33 @@ Column {.tabset .tabset-fade}
 <!-- go to [both](#AboutDefs) -->
 
 
-```{r}
 
-p("This plot shows the change in the selected indicator over time for economies where there is comparable survey data in the chosen period. The ", strong("dot", style = "color:black"), " gives the initial indicator value for that economy The ", strong("horizontal line segment", style = "color:black"), " connects the initial and final year indicator values. The ", strong("color", style = "color:black"), " indicates whether a economy's outcomes improve over the chosen interval. When mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has worsened. The economies on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.")
+<p style="text-align: justify;">
+    This plot shows the change in the selected indicator over time for economies where there is comparable survey data in the chosen period. The <strong style="color:black">dot</strong> gives the initial indicator value for that economy. The <strong style="color:black">horizontal line segment</strong> connects the initial and final year indicator values. The <strong style="color:black">color</strong> indicates whether an economy's outcomes improve over the chosen interval. When mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has worsened. The economies on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.
+</p>
+
+<strong style="color:black; text-align: justify;">What if an economy has no surveys in the chosen years?</strong>
+
+<p style="text-align: justify;">
+    Users specify the initial year (e.g., 2000) and the period over which they would like to study the change (e.g., the interval length is 5 years for looking at the 2000-2005 period).
+</p>
+
+<p style="text-align: justify;">
+    Data might be missing for some economies for specific years. To increase the number of economies available, users can specify a circa year window. For example, if the chosen circa window is 2, then data 2 years either side of 2000 are considered (i.e., between 1998 and 2002). Within the circa window, data points in the initial and final years are selected with a preference for closer and newer data points: For example, if data for 2000 is missing, the algorithm will first look for data in 2001 and if 2001 data is also missing, it will then search in 1999. If both are missing, it will look for data in 2002 and 1998. An equivalent process is applied to the final year.
+</p>
+
+<p style="text-align: justify;">
+    With a circa window larger than zero, the duration over which changes are measured differs across economies. For example, with an interval of 5 years and a window of 2, the duration varies between 1 year and 9 years (e.g. 2002-2003 and 1998-2007 are both permissible).
+</p>
 
 
-
-
-h4("What if an economy has no surveys in the chosen years?")
-
-p("Users specify the initial year (e.g., 2000) and the period over which they would like to study the change (e.g., the interval length is 5 years for looking at the 2000-2005 period).")
-
-p("Data might be missing for some economies for specific years. To increase the number of economies available, users can specify a circa year window. For example, if the chosen circa window is 2, then data 2 years either side of 2000 are considered (i.e., between 1998 and 2002). Within the circa window, data points in the initial and final years are selected with a preference for closer and newer data points: For example, if data for 2000 is missing, the algorithm will first look for data in 2001 and if 2001 data is also missing, it will then search in 1999. If both are missing, it will look for data in 2002 and 1998. An equivalent process is applied to the final year.")
-
-p("With a circa window larger than zero, the duration over which changes are measured differs across economies. For example, with an interval of 5 years and a window of 2, the duration varies between 1 year and 9 years (e.g. 2002-2003 and 1998-2007 are both permissible).")
-
-
-
-
-```
 
 Scatterplot of Indicators
 ===========================================================
 
 
 
-Sidebar {.sidebar data-width=250}
+Sidebar {.sidebar data-width=200}
 -----------------------------------------------------------------------
 
 ```{r sidebar-plot-2}
@@ -1215,7 +1269,7 @@ selectInput("ineq_indicatorY",
             selected = "Gini")
 
 
-selectInput( "select_welfare_type", 
+selectInput("select_welfare_type", 
               label = "Survey Type:", 
               choices = c("Both", "Consumption", "Income"), 
               selected = "Both"
@@ -1316,13 +1370,13 @@ checkboxInput("add_line",
 
 downloadButtonRmd(
   outputId = "DownloadButtonScatterplot", 
-  label = "Download Data as CSV"
+  label = "CSV"
 )
 
 ```
 
 
-Column {data-width=1100 .tabset .tabset-fade}
+Column {.tabset}
 -----------------------------------------------------------------------
 
 ```{r data-filter2}
@@ -1355,7 +1409,7 @@ selected_countries <- reactive({
   }else {
     selected_countries
   }
-  
+  selected_countries
   
 })
 
@@ -1373,6 +1427,15 @@ dt_use_sp <- reactive({
         year <= input$select_final_year_scatterplot
     ]
     
+  }
+  
+  # Filter by survey type
+  if(!input$select_welfare_type =="Both"){
+    dt_use_sp <- dt_use_sp[
+      welfare_type == tolower(input$select_welfare_type)
+    ]
+  } else{
+    dt_use_sp
   }
   
   
@@ -1436,8 +1499,33 @@ dt_use_sp <- reactive({
       )
     )
   ]
-  
+col_vec <- c()
+all_cntr <- dt_use_sp$country_name 
+reg <- dt_use_sp$region_name
+inc <- dt_use_sp$incgroup_current
+dt <- data.table(all_cntr = all_cntr, reg = reg)
+# Conditionally define 'bla' based on the value of 'Check'
+if (input$color_by == "Region") {
+  dt[, col_vec := ifelse(all_cntr %chin% selected_countries(), reg, "Unselected")]
+} else if (input$color_by == "Inc") {
+  dt[, col_vec := ifelse(all_cntr %chin% se_cntr, inc, "Unselected")]
+}
+# Extract the 'bla' column to a vector
+col_vec <- dt$col_vec
 
+
+# dt_use_sp <- dt_use_sp |> 
+#   mutate(
+#     Color = ifelse(
+#       country_name %chin% selected_countries(), 
+#       ifelse(
+#         input$color_by == "Region", dt_use_sp$region_name, dt_use_sp$incgroup_current
+#       ), 
+#       "Other"
+#     )
+#   )
+    
+dt_use_sp[, Color := col_vec]
 
 
     })
@@ -1445,7 +1533,7 @@ dt_use_sp <- reactive({
 
 ```
 
-### 
+### Chart
 
 ```{r plot2}
 
@@ -1472,42 +1560,53 @@ transformation_y <- function(x){
 }
 # define tooltip ----
 dt <- dt_use_sp()
-# setnames(
-#   dt, 
-#   old = c("incgroup_current"), 
-#   new = c("Income Group")
-# )
 # Initialize ggplot object
-sp1 <- ggplot(dt) +
-  labs(
-    title = paste("Relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY),
-    x = title_function(input$ineq_indicatorX),
-    y = title_function(input$ineq_indicatorY)
-  )+
-  scale_color_brewer(palette = "Dark2")
+sp1 <- ggplot(dt, aes(color = Color))
 
-# Add geom_point
-if(input$color_by == "Region"){
-  
+# Custom function to modify the palette
+modify_palette <- function(palette_name, name_to_change, new_color) {
+  palette <- brewer.pal(name = palette_name, n = length(unique(dt$Color)))
+  names(palette) <- unique(dt$Color)
+  palette[name_to_change] <- new_color
+  return(palette)
+}
+# Modify the Dark2 palette to have "NOT" as light grey
+modified_palette <- modify_palette("Dark2", "Unselected", "lightgrey")
+
+sp1 <- sp1 +
+  scale_color_manual(values = modified_palette)
+
+  # scale_color_brewer(palette = "Dark2")
+
+# # Add geom_point
+# if(input$color_by == "Region"){
+# Dynamically generate alpha values
+unique_colors <- unique(dt$Color)
+alpha_values <- setNames(rep(0.9, length(unique_colors)), unique_colors)
+alpha_values["Unselected"] = 0.2
+
   sp1 <- sp1 +
   geom_point(aes(
     x = transformation_x(IndicatorX),
     y = transformation_y(IndicatorY),
-    color = Region, 
-    text = text_tooltip
-  ))
-  
-} else{
-    sp1 <- sp1 +
-  geom_point(aes(
-    x = transformation_x(IndicatorX),
-    y = transformation_y(IndicatorY),
-    color = `Income Group`, 
-    text = text_tooltip
-  ))
-  
-  
-}
+    color = Color,
+    text = text_tooltip, 
+    alpha = Color
+  ), alpha = 0.55) +
+  scale_alpha_manual(values = alpha_values) +
+  guides(alpha=FALSE, color=guide_legend(override.aes=list(alpha=1)))
+#   
+# } else{
+#     sp1 <- sp1 +
+#   geom_point(aes(
+#     x = transformation_x(IndicatorX),
+#     y = transformation_y(IndicatorY),
+#     color = Color, 
+#     text = text_tooltip
+#   ), alpha = 0.55)
+#   
+#   
+# }
 
 
 # Add geom_smooth if required
@@ -1522,7 +1621,7 @@ if (input$add_line == TRUE) {
       )
     )
 }
-# 
+
 # Adjust theme
 sp1 <- sp1 + theme_classic()
 #   
@@ -1559,25 +1658,9 @@ sp1 <- sp1 + theme_classic()
       }
   
   }
-# input$background_regions
-#   
-if(!is.null(input$background_regions)){
-  
-  #   # Highlight countries
-  sp1 <- sp1 +
-    gghighlight(
-      country_name %chin% selected_countries(),
-      unhighlighted_params = list(color = "lightgrey")
-    )
-     
-  
-}
 
-#sp1 <- sp1 +
-  # Here comes the gganimate specific bits
-  #labs(title = 'Year: {frame_time}', x = 'GDP per capita', y = 'life expectancy') +
-  # transition_time(year) +
-  # ease_aes('linear')
+
+
 
 # Convert to plotly object
 sp1_plotly <- ggplotly(sp1, tooltip = "text")
@@ -1593,7 +1676,7 @@ sp1_plotly <- sp1_plotly |>
              xref = "paper",
             yref = "paper",
             x= 0.8,
-            y= -0.03,
+            y= -0.05,
             sizex = 0.15,
             sizey = 0.15,
             opacity = 0.8
@@ -1601,16 +1684,27 @@ sp1_plotly <- sp1_plotly |>
        annotations =
                  list(
                    x = 0,
-                   y = -0.065,
+                   y = -0.1,
                    text = source_text,
                    showarrow = F,
                    xref='paper',
                    yref='paper',
                    font=list(size=6, color="grey")
-                   ))
+                 ))
 
-sp1_plotly #|> 
- # animation_opts()
+
+sp1_plotly <- layout(sp1_plotly, 
+            title = list(text = paste("Relationship between", input$ineq_indicatorX, "and", input$ineq_indicatorY)),
+            titlefont = list(size = 14),
+            xaxis = list(title = title_function(input$ineq_indicatorX), titlefont = list(size = 12)),
+            yaxis = list(
+              title = title_function(input$ineq_indicatorY),
+              titlefont = list(size = 12)  
+            )
+)
+
+
+sp1_plotly 
 
 
 })
@@ -1646,24 +1740,18 @@ output$DownloadButtonScatterplot <- downloadHandler(
 
 
 
+### Explanation
 
 
-Column {.tabset .tabset-fade}
------------------------------------------------------------------------
-### Explanation of the chart
 
-```{r}
+<p style='text-align:justify;'>This scatterplot shows the relationship between two selected indicators. By default, it shows all data, regardless of economy, region, or whether welfare is measured by consumption or income. Making selections on the side panel will limit the display to the selected data (e.g. selecting SSA as the region and consumption as the welfare measure plots data for Sub-Saharan Africa where welfare is measured by consumption). The selected data can be compared against other economies or regions. Dots are colored by region. The chart sorts countries by PIP’s regional definition: East Asia and Pacific  (EAP), Europe and Central Asia (ECA), Latin America and the Caribbean (LAC), Middle East and North Africa (MNA), Other High Income (OHI), South Asia (SAS), Sub-Saharan Africa (SSA)</p>
 
-
-p("This scatterplot shows the relationship between two selected indicators. By default, it shows all data, regardless of economy, region, or whether welfare is measured by consumption or income. Making selections on the side panel will limit the display to the selected data (e.g. selecting SSA as the region and consumption as the welfare measure plots data for Sub-Saharan Africa where welfare is measured by consumption). The selected data can be compared against other economies or regions. Dots are colored by region.")
-
-p("The plot provides a feature for incorporating a line to depict the underlying relationship between variables. This line represents the conditional mean, estimated via locally estimated scatterplot smoothing (LOESS), and is accompanied by 95% confidence intervals.")
+<p style='text-align:justify;'>The plot provides a feature for incorporating a line to depict the underlying relationship between variables. This line represents the conditional mean, estimated via locally estimated scatterplot smoothing (LOESS), and is accompanied by 95% confidence intervals.</p>
 
 
 
 
 
-```
 
 
 
@@ -1673,7 +1761,7 @@ Table of Indicators
 ===========================================================
 
 
-Sidebar {.sidebar data-width=250}
+Sidebar {.sidebar data-width=150}
 -----------------------------------------------------------------------
 
 ```{r sidebar-table-1}
@@ -1766,7 +1854,7 @@ observeEvent(input$select_initial_year_table,
 
 downloadButtonRmd(
   outputId = "DownloadButtonTable", 
-  label = "Download Data as CSV"
+  label = "CSV"
 )
 
 
@@ -1786,24 +1874,7 @@ Row {.tabset .tabset-fade}
 make_table_across_countries <- function(
     dt,
     country_name_vec = c("Angola", "South Africa"),
-    ineq_indicators  = c(
-      "Mean",
-      "Median",
-      "MLD",
-      "Gini",
-      "Decile1",
-      "Decile2",
-      "Decile3",
-      "Decile4",
-      "Decile5",
-      "Decile6",
-      "Decile7",
-      "Decile8",
-      "Decile9",
-      "Decile10",
-      "Top_10_bottom_40_ratio",
-      "Top_20_bottom_20_ratio"
-    ),
+    ineq_indicators, 
     years_selected = c("All", "Latest", "Custom"), 
     start_year = NULL, 
     end_year = NULL
@@ -1817,11 +1888,32 @@ make_table_across_countries <- function(
   # If decile shares is selected
   if(c("Decile Shares") %chin% ineq_indicators ){
     # remove "Decile Shares" element
-    ineq_indicators <- ineq_indicators[!c("Decile Shares") %chin% ineq_indicators]
+    ineq_indicators <- ineq_indicators[!c("Decile Shares") == ineq_indicators]
     # add all individual decile shares
     ineq_indicators <- c(
       ineq_indicators, 
       paste0("decile", 1:10)
+    )
+  }
+  
+  # IF the ratios selected
+  if(c("Top 10 Bottom 40 Ratio") %chin% ineq_indicators){
+    # remove ratios elements
+    ineq_indicators <- ineq_indicators[!c("Top 10 Bottom 40 Ratio") ==ineq_indicators]
+    # add all individual decile shares
+    ineq_indicators <- c(
+      ineq_indicators, 
+      "t10_b40"
+    )
+  }
+    # IF the ratios selected
+  if(c("Top 20 Bottom 20 Ratio") %chin% ineq_indicators){
+    # remove ratios elements
+    ineq_indicators <- ineq_indicators[!c("Top 20 Bottom 20 Ratio") == ineq_indicators]
+    # add all individual decile shares
+    ineq_indicators <- c(
+      ineq_indicators, 
+      "t20_b20"
     )
   }
   
@@ -1830,9 +1922,9 @@ make_table_across_countries <- function(
     "Country",
     "Region",
     "Year",
-    "Reporting_level",
-    "Welfare_type",
-    "Comparable_spell",
+    "Level",
+    "Type",
+    "Spell",
     ineq_indicators
   )
   selected_cols <- 
@@ -1843,8 +1935,8 @@ make_table_across_countries <- function(
   
   setnames(
     dt,
-    old = c("country_name", "region_name"),
-    new = c("country", "region")                           # Clean variable names
+    old = c("country_name", "region_code", "comparable_spell", "reporting_level", "welfare_type", "top_10_bottom_40_ratio", "top_20_bottom_20_ratio"),
+    new = c("country", "region", "spell", "level", "type", "t10_b40", "t20_b20")                           # Clean variable names
   )
   setnames(
     dt,
@@ -1889,13 +1981,13 @@ make_table_across_countries <- function(
   }
   
   
-  setorder(dt, Country, Region, -Year, Reporting_level, Welfare_type)
+  setorder(dt, Country, Region, -Year, Level, Type)
   
-  setnames(
-    dt, 
-    old = c("Welfare_type"), 
-    new = c("Survey_type")
-  )
+  # setnames(
+  #   dt, 
+  #   old = c("Type"), 
+  #   new = c("Survey_type")
+  # )
   if("Mld" %chin% names(dt)){
     setnames(
       dt, 
@@ -1959,19 +2051,19 @@ list_of_columns <- lapply(
       align = "center",
       line = list(width = 1, color = 'black'),
       fill = list(color = c("grey", "grey")),
-      font = list(family = "Arial", size = 14, color = "white")
+      font = list(family = "Arial", size = 10, color = "white")
     ),
     cells = list(
       values = list_of_columns,
       align  = c("center", "center"),
       line   = list(color = "black", width = 1),
-      font   = list(family = "Arial", size = 12, color = c("black"))
+      font   = list(family = "Arial", size = 10, color = c("black"))
     ))
   
 t <- layout(
   t,
   title   = "PIP Key Inequality Indicators, Selected Economies and Years",
-  titlefont = list(color = 'black'), 
+  titlefont = list(color = 'black', size = 14), 
   title_x = 0 
 )
   
@@ -1983,7 +2075,7 @@ t <- layout(
              xref = "paper",
             yref = "paper",
             x= 0.8,
-            y= 0,
+            y= -0.02,
             sizex = 0.15,
             sizey = 0.15,
             opacity = 0.8
@@ -1996,7 +2088,7 @@ t <- layout(
                    showarrow = F, 
                    xref='paper', 
                    yref='paper', 
-                   font=list(size=6, color="grey")
+                   font=list(size=8, color="grey")
                    ))
   
 })
@@ -2020,46 +2112,43 @@ output$DownloadButtonTable <- downloadHandler(
 About and Definitions {#tab_about}
 ===========================================================
 
-Column {data-width=500}
+Column {.tabset}
 -----------------------------------------------------------------------
 
 ### About {#About}
 
+<!-- {data-width=500} -->
+<p style='text-align:justify;'>This dashboard provides a set of interactive visualizations focused on within-country inequality. The data are from the [Poverty and Inequality Platform (PIP)](https://pip.worldbank.org/home), which is the source of the World Bank’s estimates of poverty and inequality. </p>
 
-This dashboard provides a set of interactive visualizations focused on within-country inequality. The data are from the [Poverty and Inequality Platform (PIP)](https://pip.worldbank.org/home), which is the source of the World Bank’s estimates of poverty and inequality. 
+<p style='text-align:justify;'>The estimates are based on country-level household survey unit record data or grouped data. Survey data are the most widely available source of information on distributions of income or consumption. However, research on some countries has shown that surveys tend to underestimate the income of the richest, for which no corrections have been made in these estimates. </p>
 
-The estimates are based on country-level household survey unit record data or grouped data. Survey data are the most widely available source of information on distributions of income or consumption. However, research on some countries has shown that surveys tend to underestimate the income of the richest, for which no corrections have been made in these estimates. 
+<p style='text-align:justify;'>From the survey, a measure of household welfare is constructed, capturing either household income or consumption. There are important differences between the two concepts; in particular, inequality in incomes is systematically greater than inequality in consumption. Countries in Europe and Central Asia, Latin America and the Caribbean, the Other High Income group tend to use income surveys, while the rest of the world uses consumption. Users are advised to take these differences into account, especially when comparing levels of inequality across countries and regions.</p>
 
-From the survey, a measure of household welfare is constructed, capturing either household income or consumption. There are important differences between the two concepts; in particular, inequality in incomes is systematically greater than inequality in consumption. Countries in Europe and Central Asia, Latin America and the Caribbean, the Other High Income group tend to use income surveys, while the rest of the world uses consumption. Users are advised to take these differences into account, especially when comparing levels of inequality across countries and regions.
+<p style='text-align:justify;'>Changes in questionnaire design imply that estimates of poverty and inequality within countries become incomparable. Whenever such changes occur, a break is shown in the inequality trend. The visualization of changes over time only includes countries that have a [comparable](https://datanalytics.worldbank.org/PIP-Methodology/welfareaggregate.html#comparability) survey spell over the period chosen.</p>
 
-Changes in questionnaire design imply that estimates of poverty and inequality within countries become incomparable. Whenever such changes occur, a break is shown in the inequality trend. The visualization of changes over time only includes countries that have a [comparable](https://datanalytics.worldbank.org/PIP-Methodology/welfareaggregate.html#comparability) survey spell over the period chosen.
+<p style='text-align:justify;'>The term country, used interchangeably with economy, does not imply political independence but refers to any territory for which authorities report separate social or economic statistics.</p>
 
-The term country, used interchangeably with economy, does not imply political independence but refers to any territory for which authorities report separate social or economic statistics.
+<p style='text-align:justify;'>For more details on the methodology, please visit the [PIP Methodology Handbook](https://datanalytics.worldbank.org/PIP-Methodology/) and the [Global Poverty Monitoring Technical Notes](https://pip.worldbank.org/publication). For any questions regarding the data or methodology, please contact pip@worldbank.org.</p>
 
-For more details on the methodology, please visit the [PIP Methodology Handbook](https://datanalytics.worldbank.org/PIP-Methodology/) and the [Global Poverty Monitoring Technical Notes](https://pip.worldbank.org/publication). For any questions regarding the data or methodology, please contact pip@worldbank.org.
-
-Please cite the data as:  World Bank. (2023). Poverty and Inequality Platform (version 20230919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessed `r today()`. 
+<p style='text-align:justify;'>Please cite the data as:  World Bank. (2023). Poverty and Inequality Platform (version 20230919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessed `r today()`. </p>
 
 
 
-Column {data-width=500}
------------------------------------------------------------------------
 
 ### Definitions {#Definitions}
 
 <span class="underline">Inequality indicators:</span>
 
 \newline
-
-The **Gini** index ranges from 0 (perfect equality) to 100 (complete inequality). The **mean log deviation (MLD)** belongs to the family of generalized entropy inequality measures. The MLD has a minimum value of 0 (perfect equality) and has no upper bound. The Gini index is especially sensitive to changes around the middle of the distribution, while the MLD is more sensitive to changes at the bottom. The **decile shares** focus on particular parts of the distribution of income or consumption: Households are first ordered according to their welfare per capita, such that the first decile contains the 10% of the population with the lowest welfare and so on. Decile shares measure the share of total welfare belonging to each decile. The **top 10 to bottom 40 ratio** (also known as the Palma ratio) compares the welfare share of the richest tenth of the population to the poorest 40 percent. Similarly, the **top 20 to bottom 20 ratio** is the share of the richest quintile to the poorest quintile. More details on the definition of the indicators can be found [here](https://datanalytics.worldbank.org/PIP-Methodology/surveyestimates.html#inequality). 
+<p style='text-align:justify;'>The **Gini** index ranges from 0 (perfect equality) to 100 (complete inequality). The **mean log deviation (MLD)** belongs to the family of generalized entropy inequality measures. The MLD has a minimum value of 0 (perfect equality) and has no upper bound. The Gini index is especially sensitive to changes around the middle of the distribution, while the MLD is more sensitive to changes at the bottom. The **decile shares** focus on particular parts of the distribution of income or consumption: Households are first ordered according to their welfare per capita, such that the first decile contains the 10% of the population with the lowest welfare and so on. Decile shares measure the share of total welfare belonging to each decile. The **top 10 to bottom 40 ratio** (also known as the Palma ratio) compares the welfare share of the richest tenth of the population to the poorest 40 percent. Similarly, the **top 20 to bottom 20 ratio** is the share of the richest quintile to the poorest quintile. More details on the definition of the indicators can be found [here](https://datanalytics.worldbank.org/PIP-Methodology/surveyestimates.html#inequality). </p>
 
 <span class="underline">Other variables:</span>
 
 \newline
 
-The **mean** refers to average daily household per capita income or consumption in 2017 PPP USD. Purchasing power parity (PPP) conversion factors are used to adjust for price differences across countries. Similarly, the **median** refers to the median daily household per capita income or consumption in 2017 PPP USD. 
-The **year** variable is the starting year of the household survey. In some countries, the data collection spans multiple years. When looking at changes over time, users can select **circa years** (i.e., a window around the chosen year). This increases the sample of countries available, since not all countries have annual household surveys, as explained in more detail on the chart page.
+<p style='text-align:justify;'>The **mean** refers to average daily household per capita income or consumption in 2017 PPP USD. Purchasing power parity (PPP) conversion factors are used to adjust for price differences across countries. Similarly, the **median** refers to the median daily household per capita income or consumption in 2017 PPP USD. 
+The **year** variable is the starting year of the household survey. In some countries, the data collection spans multiple years. When looking at changes over time, users can select **circa years** (i.e., a window around the chosen year). This increases the sample of countries available, since not all countries have annual household surveys, as explained in more detail on the chart page.</p>
 
-Countries can also be grouped by **region**. The dashboard uses PIP’s [regional definition](https://datanalytics.worldbank.org/PIP-Methodology/lineupestimates.html#regionsandcountries) which differs from the regional classifications used by the World Bank. Some high-income economies are excluded from the geographical regions and are included as a separate group referred to as “other high income”.
+<p style='text-align:justify;'>Countries can also be grouped by **region**. The dashboard uses PIP’s [regional definition](https://datanalytics.worldbank.org/PIP-Methodology/lineupestimates.html#regionsandcountries) which differs from the regional classifications used by the World Bank. Some high-income economies are excluded from the geographical regions and are included as a separate group referred to as “other high income”.</p>
 
 

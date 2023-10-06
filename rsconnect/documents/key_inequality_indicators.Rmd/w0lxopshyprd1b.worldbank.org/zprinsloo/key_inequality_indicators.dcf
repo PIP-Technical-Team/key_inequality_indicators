@@ -5,10 +5,10 @@ account: zprinsloo
 server: w0lxopshyprd1b.worldbank.org
 hostUrl: http://w0lxopshyprd1b.worldbank.org:3939/__api__
 appId: 1295
-bundleId: 49676
-url: http://w0lxopshyprd1b.worldbank.org:3939/content/68ff3ae8-e025-4912-937d-1b5b653b4343/
-when: 1695152288.71715
-lastSyncTime: 1695152288.71717
+bundleId: 49796
+url: http://w0lxopshyprd1b.worldbank.org:3939/pip_ineq_dashboard/
+when: 1696628680.31488
+lastSyncTime: 1696628680.31489
 asMultiple: TRUE
 asStatic: FALSE
-ignoredFiles: inequality_indicators_backup.Rmd|test-publish.Rmd
+ignoredFiles: inequality_indicators_backup.Rmd|key_inequality_indicators_big.Rmd|test-publish.Rmd
