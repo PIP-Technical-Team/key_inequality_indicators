@@ -136,6 +136,19 @@ dt_class <- dt_class |>
   unique(
     by = c("economy", "incgroup_current")
   )
+# Clean country names
+dt_class[
+  38, 
+  economy := "Cote d'Ivoire"
+]
+dt_class[
+  179, 
+  economy := "Sao Tome and Principe"
+]
+dt_class[
+  198, 
+  economy := "Turkiye"
+]
 dt_pip <- joyn::merge(
   x = dt_pip, 
   y = dt_class, 
@@ -404,8 +417,8 @@ create_data_imputed_by_countries_two_years <- function(
   
   # Find the change in indicator
   dt_use[, report:=NULL]
-  dt_use[, Change := Indicator1-Indicator2]
-  dt_use[, ChangeColor := ifelse(Change<0, "Negative", "Positive")]
+  dt_use[, Change := Indicator2-Indicator1]
+  dt_use[, ChangeColor := ifelse(Change>0, "Increase", "Decrease")]
   dt_use[
     Impute_Forward1 == TRUE & Impute_Forward2 == TRUE, # both forward imputed, or not imputed at all
     ChangeYears := {
@@ -1079,15 +1092,19 @@ p <- p +
 # Conditional logic for color scales
 if(input$ineq_indicator %chin% c("Mean", "Median")){
   p <- p + 
-    scale_color_manual(values = c("Negative" = "#1b9e77", "Positive" = "#d95f02"))
-} 
-if(input$ineq_indicator %chin% c(paste0("Decile", 1:10))){
+    scale_color_manual(values = c("Increase" = "#1b9e77", "Decrease" = "#d95f02"))
+} else{
+  
+  if(input$ineq_indicator %chin% c(paste0("Decile", 1:10))){
     p <- p + 
-    scale_color_manual(values = c("Negative" = "#9ecae1", "Positive" = "#3182bd"))
-}else {
+    scale_color_manual(values = c("Increase" = "#9ecae1", "Decrease" = "#3182bd"))
+} else {
   p <- p + 
-    scale_color_manual(values = c("Negative" = "#d95f02", "Positive" = "#1b9e77"))
+    scale_color_manual(values = c("Increase" = "#d95f02", "Decrease" = "#1b9e77"))
 }
+  
+}
+
 
 
 # Convert to plotly object
@@ -1507,8 +1524,8 @@ dt <- data.table(all_cntr = all_cntr, reg = reg)
 # Conditionally define 'bla' based on the value of 'Check'
 if (input$color_by == "Region") {
   dt[, col_vec := ifelse(all_cntr %chin% selected_countries(), reg, "Unselected")]
-} else if (input$color_by == "Inc") {
-  dt[, col_vec := ifelse(all_cntr %chin% se_cntr, inc, "Unselected")]
+} else if (input$color_by == "Income group") {
+  dt[, col_vec := ifelse(all_cntr %chin% selected_countries(), inc, "Unselected")]
 }
 # Extract the 'bla' column to a vector
 col_vec <- dt$col_vec
@@ -1574,7 +1591,7 @@ modify_palette <- function(palette_name, name_to_change, new_color) {
 modified_palette <- modify_palette("Dark2", "Unselected", "lightgrey")
 
 sp1 <- sp1 +
-  scale_color_manual(values = modified_palette)
+  scale_color_manual(values = modified_palette, drop = TRUE)
 
   # scale_color_brewer(palette = "Dark2")
 
@@ -1595,18 +1612,7 @@ alpha_values["Unselected"] = 0.2
   ), alpha = 0.55) +
   scale_alpha_manual(values = alpha_values) +
   guides(alpha=FALSE, color=guide_legend(override.aes=list(alpha=1)))
-#   
-# } else{
-#     sp1 <- sp1 +
-#   geom_point(aes(
-#     x = transformation_x(IndicatorX),
-#     y = transformation_y(IndicatorY),
-#     color = Color, 
-#     text = text_tooltip
-#   ), alpha = 0.55)
-#   
-#   
-# }
+
 
 
 # Add geom_smooth if required
@@ -1684,7 +1690,7 @@ sp1_plotly <- sp1_plotly |>
        annotations =
                  list(
                    x = 0,
-                   y = -0.1,
+                   y = -0.08,
                    text = source_text,
                    showarrow = F,
                    xref='paper',
