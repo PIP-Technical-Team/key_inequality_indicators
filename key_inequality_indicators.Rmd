@@ -2136,6 +2136,8 @@ Column {.tabset}
 
 <p style='text-align:justify;'>From the survey, a measure of household welfare is constructed, capturing either household income or consumption. There are important differences between the two concepts; in particular, inequality in incomes is systematically greater than inequality in consumption. Countries in Europe and Central Asia, Latin America and the Caribbean, the Other High Income group tend to use income surveys, while the rest of the world uses consumption. Users are advised to take these differences into account, especially when comparing levels of inequality across countries and regions.</p>
 
+<p style='text-align:justify;'>There are a few special cases where a country has more than one survey in a single year. In this dashboard, the data are limited to a maximum of one survey per country per year. To download the full PIP data set, including multiple surveys per country-year, go to the [Poverty & Inequality Indicators](https://pip.worldbank.org/poverty-calculator) and download all country data.</p>
+
 <p style='text-align:justify;'>Changes in questionnaire design imply that estimates of poverty and inequality within countries become incomparable. Whenever such changes occur, a break is shown in the inequality trend. The visualization of changes over time only includes countries that have a [comparable](https://datanalytics.worldbank.org/PIP-Methodology/welfareaggregate.html#comparability) survey spell over the period chosen.</p>
 
 <p style='text-align:justify;'>The term country, used interchangeably with economy, does not imply political independence but refers to any territory for which authorities report separate social or economic statistics.</p>
