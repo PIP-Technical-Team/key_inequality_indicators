@@ -2002,6 +2002,12 @@ make_table_across_countries <- function(
     )
   }
   
+  # remove comparable spell
+  dt[
+    , 
+    Spell := NULL
+  ]
+  
   dt # return
 } # end of make_table_across_countries()
 
