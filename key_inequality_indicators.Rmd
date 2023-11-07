@@ -795,6 +795,27 @@ dt_trend_plotly <- layout(dt_trend_plotly,
             )
 )
 
+# Remove some modebar icons from plotly object
+dt_trend_plotly <- dt_trend_plotly |> 
+   config(
+     modeBarButtonsToRemove = list(
+       "lasso2d", 
+       "zoom2d", 
+       "pan2d", 
+       "select2d",
+       "zoomIn2d", 
+       "zoomOut2d", 
+       "autoScale2d", 
+       "resetScale2d", 
+       "hoverCompareCartesian", 
+       "hoverClosestCartesian"
+     )
+   ) |>
+  config(
+    displaylogo = FALSE
+  )
+   #config(displayModeBar = F)
+
 dt_trend_plotly
 
 })
@@ -916,7 +937,27 @@ dt_trend_plotly <- layout(dt_trend_plotly,
             )
 )
 
+dt_trend_plotly <- dt_trend_plotly |> 
+   config(
+     modeBarButtonsToRemove = list(
+       "lasso2d", 
+       "zoom2d", 
+       "pan2d", 
+       "select2d",
+       "zoomIn2d", 
+       "zoomOut2d", 
+       "autoScale2d", 
+       "resetScale2d", 
+       "hoverCompareCartesian", 
+       "hoverClosestCartesian"
+     )
+   ) |>
+  config(
+    displaylogo = FALSE
+  )
+
 dt_trend_plotly
+
 
 })
 
@@ -1161,7 +1202,25 @@ pp <- layout(pp,
 
 
 # Display the plot
-pp
+pp |> 
+   config(
+     modeBarButtonsToRemove = list(
+       "lasso2d", 
+       "zoom2d", 
+       "pan2d", 
+       "select2d",
+       "zoomIn2d", 
+       "zoomOut2d", 
+       "autoScale2d", 
+       "resetScale2d", 
+       "hoverCompareCartesian", 
+       "hoverClosestCartesian"
+     )
+   ) |>
+  config(
+    displaylogo = FALSE
+  )
+
 })
 
 reactive({
@@ -1710,7 +1769,24 @@ sp1_plotly <- layout(sp1_plotly,
 )
 
 
-sp1_plotly 
+sp1_plotly |> 
+   config(
+     modeBarButtonsToRemove = list(
+       "lasso2d", 
+       "zoom2d", 
+       "pan2d", 
+       "select2d",
+       "zoomIn2d", 
+       "zoomOut2d", 
+       "autoScale2d", 
+       "resetScale2d", 
+       "hoverCompareCartesian", 
+       "hoverClosestCartesian"
+     )
+   ) |>
+  config(
+    displaylogo = FALSE
+  )
 
 
 })
