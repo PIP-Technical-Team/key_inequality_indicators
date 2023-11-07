@@ -28,7 +28,7 @@ library("flexdashboard")
 library("joyn")
 library("gghighlight")
 library("DT")
-
+library("zoo")
 ```
 
 ```{r setup-data, include=FALSE}
@@ -1918,6 +1918,12 @@ make_table_across_countries <- function(
       new = "MLD"
     )
   }
+  
+  # remove `comparable spells`
+  dt[
+    , 
+    Comparable_spell := NULL
+  ]
   
   dt # return
 } # end of make_table_across_countries()
