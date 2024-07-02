@@ -149,17 +149,15 @@ dt_class[
   198, 
   economy := "Turkiye"
 ]
-dt_pip <- joyn::merge(
+dt_pip <- joyn::joyn(
   x = dt_pip, 
   y = dt_class, 
-  by = c("country_name = economy"), 
+  by = c("country_code = code"), 
   keep = "left", 
-  yvars = "incgroup_current"
+  match_type = "m:1",
+  y_vars_to_keep = "incgroup_current", 
+  reportvar = FALSE
 )
-dt_pip[
-  , 
-  report := NULL
-]
 ```
 
 
@@ -249,16 +247,17 @@ create_data_imputed_by_countries <- function(
   ]
   
   # Fill Missing ----
-  dt_use <- joyn::merge(
+  dt_use <- joyn::joyn(
     CJ(
       country_name = dt_use$country_name |> unique(), 
       year         = dt_use$year         |> unique()
     ),
     dt_use, 
-    by = c("country_name", "year")
+    by = c("country_name", "year"), 
+    reportvar = FALSE
   )
   dt_use[, missing := ifelse(is.na(Indicator), TRUE, FALSE)] # missing indicator
-  dt_use <- dt_use[, report := NULL]
+  #dt_use <- dt_use[, report := NULL]
   
   # If missing, impute forward or backwards
   setorder(dt_use, country_name, year) # order by year
@@ -283,25 +282,27 @@ dt_backward <-
              by = country_name
              ]
 
-dt_use <- joyn::merge(
+dt_use <- joyn::joyn(
     dt_use, 
     dt_forward, 
     by = c("country_name"), 
     yvars = T, 
     match_type = "m:1", 
-    keep = "left"
+    keep = "left", 
+    reportvar = FALSE
   )
 
-  dt_use <- dt_use[, report := NULL]
-  dt_use <- joyn::merge(
+  #dt_use <- dt_use[, report := NULL]
+  dt_use <- joyn::joyn(
     dt_use, 
     dt_backward, 
     by = c("country_name"), 
     yvars = T, 
     match_type = "m:1", 
-    keep = "left"
+    keep = "left", 
+  reportvar = FALSE
   )
-  dt_use <- dt_use[, report := NULL]
+  #dt_use <- dt_use[, report := NULL]
   dt_use[is.na(Forward), Forward := 100]
   dt_use[is.na(Backward), Backward := 100]
   dt_use[, Impute_Forward := (Backward >= Forward)]
@@ -407,16 +408,17 @@ create_data_imputed_by_countries_two_years <- function(
   dt2 <- dt2[, .(country_name, year, Indicator2, ImputeYears2, Impute_Forward2, region_name, survey_comparability)]
   
   # Join the two years
-  dt_use <- joyn::merge(
+  dt_use <- joyn::joyn(
     dt1, 
     dt2, 
     keep = "inner", 
     match_type = "1:1", 
-    by = c("country_name", "survey_comparability")
+    by = c("country_name", "survey_comparability"), 
+  reportvar = FALSE
   )
   
   # Find the change in indicator
-  dt_use[, report:=NULL]
+  #dt_use[, report:=NULL]
   dt_use[, Change := Indicator2-Indicator1]
   dt_use[, ChangeColor := ifelse(Change>0, "Increase", "Decrease")]
   dt_use[
