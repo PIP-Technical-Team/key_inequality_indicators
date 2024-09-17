@@ -63,7 +63,7 @@ dt_pip[
   )
 ]
 dt_pip[, 
-       gini:= gini*100]
+       gini := gini*100]
 
 
 # Step 2: creating general objects ----
@@ -156,10 +156,33 @@ dt_pip <- joyn::joyn(
   by = c("country_code = code"), 
   keep = "left", 
   match_type = "m:1",
-  y_vars_to_keep = "incgroup_current", 
+  #y_vars_to_keep = "incgroup_current", 
   reportvar = FALSE
 )
 ```
+
+```{r create-high-ineq}
+dt_pip  |>
+  fgroup_by(country_code) |>
+  fmutate(
+    giniever = gini,
+    giniever = na.locf(giniever, na.rm = FALSE), # Forward fill
+    giniever = na.fill(giniever, fill = NA) # Ensure no trailing NAs
+  ) |>
+  fmutate(
+    giniever = na.locf(giniever, fromLast = TRUE) # Backward fill
+  ) |> 
+  fungroup() |> 
+  fselect( country_code, year, region_code, region_name, welfare_time, welfare_type, gini, 
+         incgroup_current, ida_current, fcv_current, giniever) |>
+  fsubset(year >= 2000 & year <= 2022) |>
+  fmutate(highinequality = giniever > 0.40) |> 
+  fmutate(ineq_type = fifelse(giniever < 30 , "Low inequality (<30)",
+                             fifelse(giniever > 40, "High inequality (>40)", 
+                                     "Moderate inequality (30-40)"))) |> 
+  View()
+```
+
 
 
 ```{r load-data-functions}
