@@ -47,6 +47,25 @@ library("RColorBrewer")
 library("collapse")
 ```
 
+
+```{r colorbrewer-defaults}
+
+scale_colour_brewer_d <- function(..., palette = "Dark2") {
+  scale_colour_brewer(..., palette = palette )
+}
+
+scale_fill_brewer_d <- function(..., palette = "Dark2") {
+  scale_fill_brewer(..., palette = palette)
+}
+
+options(
+  ggplot2.discrete.colour = scale_colour_brewer_d,
+  ggplot2.discrete.fill = scale_fill_brewer_d
+)
+
+```
+
+
 ```{r setup-data, include=FALSE}
 source_text <- paste("Source: World Bank, Poverty and Inequality Platform (version 20230919_2017).")
 
@@ -162,7 +181,21 @@ dt_pip <- joyn::joyn(
 ```
 
 ```{r create-high-ineq}
-dt_pip  |>
+dt_ineq <- joyn::joyn(
+  dt_pip |> 
+  fsubset(year >= 2000 & year <= 2022) |>
+    distinct(country_name, country_code, region_code, region_name, reporting_level, welfare_type) |>
+    crossing(year = 2000:2022), 
+  dt_pip |> 
+  fsubset(year >= 2000 & year <= 2022), 
+  match_type = "1:1",
+  by = c("country_code", 
+         "year", 
+         "reporting_level", 
+         "welfare_type"), 
+  verbose = FALSE)
+
+dt_ineq <- dt_ineq  |>
   fgroup_by(country_code) |>
   fmutate(
     giniever = gini,
@@ -175,12 +208,11 @@ dt_pip  |>
   fungroup() |> 
   fselect( country_code, year, region_code, region_name, welfare_time, welfare_type, gini, 
          incgroup_current, ida_current, fcv_current, giniever) |>
-  fsubset(year >= 2000 & year <= 2022) |>
   fmutate(highinequality = giniever > 0.40) |> 
   fmutate(ineq_type = fifelse(giniever < 30 , "Low inequality (<30)",
                              fifelse(giniever > 40, "High inequality (>40)", 
                                      "Moderate inequality (30-40)"))) |> 
-  View()
+  fmutate(country_count = 1L)
 ```
 
 
@@ -2224,6 +2256,202 @@ output$DownloadButtonTable <- downloadHandler(
 
 
 ```
+
+
+
+
+
+
+High inequality
+===========================================================
+
+
+Sidebar {.sidebar data-width=200}
+-----------------------------------------------------------------------
+
+```{r sidebar-plot-ineq}
+# Select Indicator
+# selectInput("ineq_indicator", 
+#             label = "Indicator:",
+#             choices = c(
+#               "Mean", 
+#               "Median", 
+#               "MLD", 
+#               "Gini", 
+#               "Decile1",
+#               "Decile2",
+#               "Decile3",
+#               "Decile4",
+#               "Decile5",
+#               "Decile6",
+#               "Decile7",
+#               "Decile8",
+#               "Decile9",
+#               "Decile10",
+#               "Top 10 Bottom 40 Ratio", 
+#               "Top 20 Bottom 20 Ratio"
+#             ),
+#             selected = "Gini")
+
+
+# Select initial year
+# selectInput("initial_year",
+#             label    = "Initial Year",
+#             choices  = dt_pip$year |> unique() |> sort(),
+#             selected = 2010,
+#             multiple = FALSE)
+
+
+# Select initial year
+# sliderInput("interval", 
+#              label = "Interval Length: measure the change over how many years?",
+#              min = 1, max = 10, value = 10, step = 1)
+
+# Select initial year
+# sliderInput("window", 
+#              label = "Circa years window",
+#              min = 0, max = 5, value = 0, step = 1)
+
+# selectInput(
+#   "do_not_plot", 
+#   label    = "Remove from plot", 
+#   choices  = c(
+#     pip_countries_regions$region_name |> 
+#       sort() |> 
+#       unique(), 
+#     pip_countries |> 
+#       sort() |> 
+#       unique()
+#   ), 
+#   selected = NULL,
+#   multiple = TRUE
+# )
+
+
+# downloadButtonRmd(
+#   outputId = "DownloadButtonChange", 
+#   label = "csv"
+# )
+
+
+```
+
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Chart 
+
+
+```{r}
+
+
+```
+
+```{r}
+renderPlotly({
+
+  p <- dt_ineq |> 
+    fmutate(ineq_type = factor(ineq_type, 
+                               level = c("High inequality (>40)", 
+                                         "Moderate inequality (30-40)",
+                                         "Low inequality (<30)"))) |> 
+    fgroup_by(ineq_type, year) |> 
+    fselect(ineq_type, year, country_count) |> 
+    fnobs() |> 
+    fungroup() |> 
+    fmutate(text_tooltip = paste0("Year: ", year, "\n",
+                                  "Count: ", country_count, "\n", 
+                                  "Ineq. type: ", ineq_type)) |> 
+    ggplot(aes(x     = year, 
+               y     = country_count, 
+               fill  = ineq_type, 
+               color = ineq_type, 
+               text  = text_tooltip)) +
+    geom_col(position = position_fill(), alpha = 0.8) +
+    scale_y_continuous(labels = scales::percent) +
+    geom_text(aes(label = country_count),
+            position  = position_fill(vjust = .5), 
+            color = "black") + 
+    theme_classic() +  
+    labs(title = "Number of countries in each inequality category", 
+         x = "Year",
+         y = "Economy count",  
+         linetype = "Cylinder") +
+    guides(color = "none") + 
+    guides(fill = guide_legend(title = "Inequality type"))
+  
+    ggplotly(p, 
+             tooltip = "text")
+  
+})
+# 
+# reactive({
+#   
+# dt <- dt_use()
+# dt <- dt[
+#   ,
+#   .(country_name, year, region_name, Indicator1, AnnualizedChange)
+# ]
+# setnames(
+#   dt, 
+#   old = c("country_name", "year", "region_name", "Indicator1", "AnnualizedChange"), 
+#   new = c("Country", "Year", "Region", str_to_title(input$ineq_indicator), "Annualized_Change")
+# )
+# # setnames(
+# #   dt, 
+# #   old = c("IndicatorX", "IndicatorY"), 
+# #   new = c(input$ineq_indicatorX, input$ineq_indicatorY)
+# # )
+# output$DownloadButtonChange <- downloadHandler(
+#   filename = function() {
+#     paste("PIP-key-ineq-indicators-change", Sys.Date(), ".csv", sep = "")
+#   },
+#   content = function(file) {
+#     write.csv(
+#       dt
+#       , file)
+#   }
+# )
+# 
+# })
+
+
+```
+
+
+
+<p style='text-align:justify;'></p>
+
+### Explanation
+
+<!-- go to the [definitions page](#definitions) -->
+<!-- go to [Definitions](#Definitions) -->
+<!-- go to [About](#About) -->
+<!-- go to [both](#AboutDefinitions) -->
+<!-- go to [both](#AboutDefs) -->
+
+
+
+<p style="text-align: justify;">
+    This plot shows the change in the selected indicator over time for economies where there is comparable survey data in the chosen period. The <strong style="color:black">dot</strong> gives the initial indicator value for that economy. The <strong style="color:black">horizontal line segment</strong> connects the initial and final year indicator values. The <strong style="color:black">color</strong> indicates whether an economy's outcomes improve over the chosen interval. When mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has worsened. The economies on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.
+</p>
+
+<strong style="color:black; text-align: justify;">What if an economy has no surveys in the chosen years?</strong>
+
+<p style="text-align: justify;">
+    Users specify the initial year (e.g., 2000) and the period over which they would like to study the change (e.g., the interval length is 5 years for looking at the 2000-2005 period).
+</p>
+
+<p style="text-align: justify;">
+    Data might be missing for some economies for specific years. To increase the number of economies available, users can specify a circa year window. For example, if the chosen circa window is 2, then data 2 years either side of 2000 are considered (i.e., between 1998 and 2002). Within the circa window, data points in the initial and final years are selected with a preference for closer and newer data points: For example, if data for 2000 is missing, the algorithm will first look for data in 2001 and if 2001 data is also missing, it will then search in 1999. If both are missing, it will look for data in 2002 and 1998. An equivalent process is applied to the final year.
+</p>
+
+<p style="text-align: justify;">
+    With a circa window larger than zero, the duration over which changes are measured differs across economies. For example, with an interval of 5 years and a window of 2, the duration varies between 1 year and 9 years (e.g. 2002-2003 and 1998-2007 are both permissible).
+</p>
+
+
+
 
 
 
