@@ -220,7 +220,12 @@ dt_ineq <- dt_ineq  |>
   fmutate(ineq_type = fifelse(giniever < 30 , "Low inequality (<30)",
                              fifelse(giniever > 40, "High inequality (>40)", 
                                      "Moderate inequality (30-40)"))) |> 
-  fmutate(country_count = 1L)
+  fmutate(country_count = 1L) |> 
+  fmutate(incgroup_current = factor(incgroup_current, 
+                                    levels = c("Low income", 
+                                               "Lower middle income", 
+                                               "Upper middle income", 
+                                               "High income")))
 
 # dt_ineq |>
 #   fmutate(
@@ -1366,7 +1371,7 @@ output$DownloadButtonChange <- downloadHandler(
 
 
 
-Scatterplot of Indicators
+Scatterplot
 ===========================================================
 
 
@@ -1910,12 +1915,275 @@ output$DownloadButtonScatterplot <- downloadHandler(
 
 
 
+High inequality
+===========================================================
+
+
+Sidebar {.sidebar data-width=200}
+-----------------------------------------------------------------------
+
+```{r sidebar-plot-ineq}
+# Select Indicator
+selectInput("high_ineq_region",
+            label = "Plot by:",
+            choices = c(
+              "Global",
+              dt_ineq$region_code |>
+                unique()
+            ),
+            selected = "Global")
+
+# Select Indicator
+selectInput("high_ineq_group_by",
+            label = "Group by:",
+            choices = c(
+              "Income groups",
+              "Regions", 
+              "FCV", 
+              "IDA"
+            ),
+            selected = "Income groups")
+
+
+# Select initial year
+# selectInput("initial_year",
+#             label    = "Initial Year",
+#             choices  = dt_pip$year |> unique() |> sort(),
+#             selected = 2010,
+#             multiple = FALSE)
+
+
+# Select initial year
+# sliderInput("interval", 
+#              label = "Interval Length: measure the change over how many years?",
+#              min = 1, max = 10, value = 10, step = 1)
+
+# Select initial year
+# sliderInput("window", 
+#              label = "Circa years window",
+#              min = 0, max = 5, value = 0, step = 1)
+
+# selectInput(
+#   "do_not_plot", 
+#   label    = "Remove from plot", 
+#   choices  = c(
+#     pip_countries_regions$region_name |> 
+#       sort() |> 
+#       unique(), 
+#     pip_countries |> 
+#       sort() |> 
+#       unique()
+#   ), 
+#   selected = NULL,
+#   multiple = TRUE
+# )
+
+
+# downloadButtonRmd(
+#   outputId = "DownloadButtonChange", 
+#   label = "csv"
+# )
+
+
+```
+
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Chart 
+
+
+```{r}
+# 
+# high_ineq_counts_plot <- reactive({
+#   
+#   p <- dt_ineq |> 
+#     fmutate(ineq_type = factor(ineq_type, 
+#                                level = c("High inequality (>40)", 
+#                                          "Moderate inequality (30-40)",
+#                                          "Low inequality (<30)"))) |> 
+#     fgroup_by(ineq_type, year) |> 
+#     fselect(ineq_type, year, country_count) |> 
+#     fnobs() |> 
+#     fungroup() |> 
+#     fmutate(text_tooltip = paste0("Year: ", year, "\n",
+#                                   "Count: ", country_count, "\n", 
+#                                   "Ineq. type: ", ineq_type))
+#   
+#   # if (!input$high_ineq_region == "Global") {
+#   #   p <- p |> 
+#   #     fsubset(region_code == !input$high_ineq_region)
+#   # }
+# 
+#     ggplot(aes(x     = year,
+#                y     = country_count, 
+#                fill  = ineq_type, 
+#                color = ineq_type, 
+#                text  = text_tooltip)) +
+#     geom_col(position = position_fill(), alpha = 0.8) +
+#     scale_y_continuous(labels = scales::percent) +
+#     geom_text(aes(label = country_count),
+#             position  = position_fill(vjust = .5), 
+#             color = "black") + 
+#     theme_classic() +  
+#     labs(title = paste0("Number of countries in each inequality category, ", input$high_ineq_region),
+#          x = "Year",
+#          y = "Economy count",  
+#          linetype = "Cylinder") +
+#     guides(color = "none") + 
+#     guides(fill = guide_legend(title = "Inequality type"))
+#   
+#     ggplotly(p, 
+#              tooltip = "text")
+#   
+# })
+
+```
+
+```{r}
+
+renderPlotly({
+  
+  if (!input$high_ineq_region == "Global") {
+    p <- dt_ineq |>
+      fsubset(region_code == as.character(input$high_ineq_region))
+  } else {
+    p <- dt_ineq
+  }
+    p <- p |> 
+    fmutate(ineq_type = factor(ineq_type, 
+                               level = c("High inequality (>40)", 
+                                         "Moderate inequality (30-40)",
+                                         "Low inequality (<30)"))) |> 
+    fgroup_by(ineq_type, year) |> 
+    fselect(ineq_type, year, country_count) |> 
+    fnobs() |> 
+    fungroup() |> 
+    fmutate(text_tooltip = paste0("Year: ", year, "\n",
+                                  "Count: ", country_count, "\n", 
+                                  "Ineq. type: ", ineq_type))
+  
+    p <- p |> 
+    ggplot(aes(x     = year,
+               y     = country_count, 
+               fill  = ineq_type, 
+               color = ineq_type, 
+               text  = text_tooltip)) +
+    geom_col(position = position_fill(), alpha = 0.8) +
+    scale_y_continuous(labels = scales::percent) +
+    geom_text(aes(label = country_count),
+            position  = position_fill(vjust = .5), 
+            color = "black") + 
+    theme_classic() +  
+    labs(title = paste0("Number of countries in each inequality category, ", input$high_ineq_region),
+         x = "Year",
+         y = "Economy count",  
+         linetype = "Cylinder") +
+    guides(color = "none") + 
+    guides(fill = guide_legend(title = "Inequality type"))
+  
+    ggplotly(p, 
+             tooltip = "text")
+})
+
+
+
+```
+
+### Explanation
+```{r}
+renderPlotly({
+  gb <- switch(input$high_ineq_group_by, 
+               "Income groups" = "incgroup_current", 
+               "Regions"       = "region_code", 
+               "FCV"           = "fcv_current", 
+               "IDA"           = "ida_current", 
+               input$high_ineq_group_by)
+  
+  max_year <- max(dt_ineq$year)
+  
+  #gb <- c("ineq_type", "year", as.character(gb))
+  p <- dt_ineq |> 
+    fsubset(year == max_year) |> 
+    fmutate(ineq_type = factor(ineq_type, 
+                               level = c("High inequality (>40)", 
+                                         "Moderate inequality (30-40)",
+                                         "Low inequality (<30)")))
+  setnames(x   = p, 
+           old = c(as.character(gb)), 
+           new = "Group")
+  
+  p <- p |> 
+    fselect(ineq_type, year, Group, country_count) |>
+    fgroup_by(ineq_type, year, Group) |>
+    fnobs() |>
+    fungroup()
+    
+  p <- p |> 
+    fgroup_by(Group) |> 
+    fmutate(use          = country_count/sum(country_count), 
+            text_tooltip = paste0("Year: ", year, "\n",
+                                  "Share: ", round(use, 2), "\n", 
+                                  "Ineq. type: ", ineq_type, "\n", 
+                                  input$high_ineq_group_by, ": ", Group))
+    # fgroup_by(year) |>
+    #fsummarise(country_count = fsum(country_count)) |> 
+    #fungroup() |> 
+
+    # fmutate(text_tooltip = paste0("Year: ", year, "\n",
+    #                               "Count: ", country_count, "\n", 
+    #                               "Ineq. type: ", ineq_type))
+  
+  p <- p |>
+    ggplot(aes(x    = Group,
+               y    = use,
+               fill = ineq_type, 
+               text = text_tooltip)) +
+    geom_bar(stat     = 'identity',
+             position = 'stack', 
+             alpha    = 0.8) +
+    theme_classic() +  
+    labs(title = paste0("Share of economies in different inequality categories, by ", tolower(input$high_ineq_group_by)),
+         x = input$high_ineq_group_by,
+         y = "Share of economies, %") +
+    guides(color = "none") + 
+    scale_y_continuous(labels = scales::percent) +
+    guides(fill = guide_legend(title = "Inequality type"))
+  
+  ggplotly(p, 
+           tooltip = "text")
+})
+
+
+  
+# ggplot(dt_ineq, 
+#        aes(x = cat, y = value, fill = variable)) + 
+#   geom_bar(stat = 'identity', position = 'stack') #+ facet_grid(~ person)
+```
+
+
+<p style='text-align:justify;'></p>
+
+
+
+<!-- go to the [definitions page](#definitions) -->
+<!-- go to [Definitions](#Definitions) -->
+<!-- go to [About](#About) -->
+<!-- go to [both](#AboutDefinitions) -->
+<!-- go to [both](#AboutDefs) -->
 
 
 
 
 
-Table of Indicators
+
+
+
+
+
+
+
+Table
 ===========================================================
 
 
@@ -2280,288 +2548,9 @@ output$DownloadButtonTable <- downloadHandler(
 
 
 
-High inequality
-===========================================================
 
 
-Sidebar {.sidebar data-width=200}
------------------------------------------------------------------------
-
-```{r sidebar-plot-ineq}
-# Select Indicator
-selectInput("high_ineq_region",
-            label = "Plot by:",
-            choices = c(
-              "Global",
-              dt_ineq$region_code |>
-                unique()
-            ),
-            selected = "Global")
-
-# Select Indicator
-selectInput("high_ineq_group_by",
-            label = "Group by:",
-            choices = c(
-              "Income groups",
-              "Regions", 
-              "FCV", 
-              "IDA"
-            ),
-            selected = "Income groups")
-
-
-# Select initial year
-# selectInput("initial_year",
-#             label    = "Initial Year",
-#             choices  = dt_pip$year |> unique() |> sort(),
-#             selected = 2010,
-#             multiple = FALSE)
-
-
-# Select initial year
-# sliderInput("interval", 
-#              label = "Interval Length: measure the change over how many years?",
-#              min = 1, max = 10, value = 10, step = 1)
-
-# Select initial year
-# sliderInput("window", 
-#              label = "Circa years window",
-#              min = 0, max = 5, value = 0, step = 1)
-
-# selectInput(
-#   "do_not_plot", 
-#   label    = "Remove from plot", 
-#   choices  = c(
-#     pip_countries_regions$region_name |> 
-#       sort() |> 
-#       unique(), 
-#     pip_countries |> 
-#       sort() |> 
-#       unique()
-#   ), 
-#   selected = NULL,
-#   multiple = TRUE
-# )
-
-
-# downloadButtonRmd(
-#   outputId = "DownloadButtonChange", 
-#   label = "csv"
-# )
-
-
-```
-
-Column {.tabset}
------------------------------------------------------------------------
-
-### Chart 
-
-
-```{r}
-# 
-# high_ineq_counts_plot <- reactive({
-#   
-#   p <- dt_ineq |> 
-#     fmutate(ineq_type = factor(ineq_type, 
-#                                level = c("High inequality (>40)", 
-#                                          "Moderate inequality (30-40)",
-#                                          "Low inequality (<30)"))) |> 
-#     fgroup_by(ineq_type, year) |> 
-#     fselect(ineq_type, year, country_count) |> 
-#     fnobs() |> 
-#     fungroup() |> 
-#     fmutate(text_tooltip = paste0("Year: ", year, "\n",
-#                                   "Count: ", country_count, "\n", 
-#                                   "Ineq. type: ", ineq_type))
-#   
-#   # if (!input$high_ineq_region == "Global") {
-#   #   p <- p |> 
-#   #     fsubset(region_code == !input$high_ineq_region)
-#   # }
-# 
-#     ggplot(aes(x     = year,
-#                y     = country_count, 
-#                fill  = ineq_type, 
-#                color = ineq_type, 
-#                text  = text_tooltip)) +
-#     geom_col(position = position_fill(), alpha = 0.8) +
-#     scale_y_continuous(labels = scales::percent) +
-#     geom_text(aes(label = country_count),
-#             position  = position_fill(vjust = .5), 
-#             color = "black") + 
-#     theme_classic() +  
-#     labs(title = paste0("Number of countries in each inequality category, ", input$high_ineq_region),
-#          x = "Year",
-#          y = "Economy count",  
-#          linetype = "Cylinder") +
-#     guides(color = "none") + 
-#     guides(fill = guide_legend(title = "Inequality type"))
-#   
-#     ggplotly(p, 
-#              tooltip = "text")
-#   
-# })
-
-```
-
-```{r}
-
-renderPlotly({
-  
-  if (!input$high_ineq_region == "Global") {
-    p <- dt_ineq |>
-      fsubset(region_code == as.character(input$high_ineq_region))
-  } else {
-    p <- dt_ineq
-  }
-    p <- p |> 
-    fmutate(ineq_type = factor(ineq_type, 
-                               level = c("High inequality (>40)", 
-                                         "Moderate inequality (30-40)",
-                                         "Low inequality (<30)"))) |> 
-    fgroup_by(ineq_type, year) |> 
-    fselect(ineq_type, year, country_count) |> 
-    fnobs() |> 
-    fungroup() |> 
-    fmutate(text_tooltip = paste0("Year: ", year, "\n",
-                                  "Count: ", country_count, "\n", 
-                                  "Ineq. type: ", ineq_type))
-  
-    p <- p |> 
-    ggplot(aes(x     = year,
-               y     = country_count, 
-               fill  = ineq_type, 
-               color = ineq_type, 
-               text  = text_tooltip)) +
-    geom_col(position = position_fill(), alpha = 0.8) +
-    scale_y_continuous(labels = scales::percent) +
-    geom_text(aes(label = country_count),
-            position  = position_fill(vjust = .5), 
-            color = "black") + 
-    theme_classic() +  
-    labs(title = paste0("Number of countries in each inequality category, ", input$high_ineq_region),
-         x = "Year",
-         y = "Economy count",  
-         linetype = "Cylinder") +
-    guides(color = "none") + 
-    guides(fill = guide_legend(title = "Inequality type"))
-  
-    ggplotly(p, 
-             tooltip = "text")
-})
-
-
-
-```
-
-### Explanation
-```{r}
-renderPlotly({
-  gb <- switch(input$high_ineq_group_by, 
-               "Income groups" = "incgroup_current", 
-               "Regions"       = "region_code", 
-               "FCV"           = "fcv_current", 
-               "IDA"           = "ida_current", 
-               input$high_ineq_group_by)
-  
-  max_year <- max(dt_ineq$year)
-  
-  #gb <- c("ineq_type", "year", as.character(gb))
-  p <- dt_ineq |> 
-    fsubset(year == max_year) |> 
-    fmutate(ineq_type = factor(ineq_type, 
-                               level = c("High inequality (>40)", 
-                                         "Moderate inequality (30-40)",
-                                         "Low inequality (<30)")))
-  setnames(x   = p, 
-           old = c(as.character(gb)), 
-           new = "Group")
-  
-  p <- p |> 
-    fselect(ineq_type, year, Group, country_count) |>
-    fgroup_by(ineq_type, year, Group) |>
-    fnobs() |>
-    fungroup()
-    
-  p <- p |> 
-    fgroup_by(Group) |> 
-    fmutate(use          = country_count/sum(country_count), 
-            text_tooltip = paste0("Year: ", year, "\n",
-                                  "Share: ", round(use, 2), "\n", 
-                                  "Ineq. type: ", ineq_type, "\n", 
-                                  input$high_ineq_group_by, ": ", Group))
-    # fgroup_by(year) |>
-    #fsummarise(country_count = fsum(country_count)) |> 
-    #fungroup() |> 
-
-    # fmutate(text_tooltip = paste0("Year: ", year, "\n",
-    #                               "Count: ", country_count, "\n", 
-    #                               "Ineq. type: ", ineq_type))
-  
-  p <- p |>
-    ggplot(aes(x    = Group,
-               y    = use,
-               fill = ineq_type, 
-               text = text_tooltip)) +
-    geom_bar(stat     = 'identity',
-             position = 'stack') +
-    theme_classic() +  
-    labs(title = paste0("Share of economies in different inequality categories, by ", tolower(input$high_ineq_group_by)),
-         x = input$high_ineq_group_by,
-         y = "Share of economies, %") +
-    guides(color = "none") + 
-    scale_y_continuous(labels = scales::percent) +
-    guides(fill = guide_legend(title = "Inequality type"))
-  
-  ggplotly(p, 
-           tooltip = "text")
-})
-
-
-  
-# ggplot(dt_ineq, 
-#        aes(x = cat, y = value, fill = variable)) + 
-#   geom_bar(stat = 'identity', position = 'stack') #+ facet_grid(~ person)
-```
-
-
-<p style='text-align:justify;'></p>
-
-
-
-<!-- go to the [definitions page](#definitions) -->
-<!-- go to [Definitions](#Definitions) -->
-<!-- go to [About](#About) -->
-<!-- go to [both](#AboutDefinitions) -->
-<!-- go to [both](#AboutDefs) -->
-
-
-
-<p style="text-align: justify;">
-    This plot shows the change in the selected indicator over time for economies where there is comparable survey data in the chosen period. The <strong style="color:black">dot</strong> gives the initial indicator value for that economy. The <strong style="color:black">horizontal line segment</strong> connects the initial and final year indicator values. The <strong style="color:black">color</strong> indicates whether an economy's outcomes improve over the chosen interval. When mean or median are selected, green means these welfare measures have increased over time. For the remaining indicators, an increase is shown in red, meaning that the inequality has worsened. The economies on the y-axis are ordered according to the chosen indicator, where the top country has the largest indicator value in the initial year.
-</p>
-
-<strong style="color:black; text-align: justify;">What if an economy has no surveys in the chosen years?</strong>
-
-<p style="text-align: justify;">
-    Users specify the initial year (e.g., 2000) and the period over which they would like to study the change (e.g., the interval length is 5 years for looking at the 2000-2005 period).
-</p>
-
-<p style="text-align: justify;">
-    Data might be missing for some economies for specific years. To increase the number of economies available, users can specify a circa year window. For example, if the chosen circa window is 2, then data 2 years either side of 2000 are considered (i.e., between 1998 and 2002). Within the circa window, data points in the initial and final years are selected with a preference for closer and newer data points: For example, if data for 2000 is missing, the algorithm will first look for data in 2001 and if 2001 data is also missing, it will then search in 1999. If both are missing, it will look for data in 2002 and 1998. An equivalent process is applied to the final year.
-</p>
-
-<p style="text-align: justify;">
-    With a circa window larger than zero, the duration over which changes are measured differs across economies. For example, with an interval of 5 years and a window of 2, the duration varies between 1 year and 9 years (e.g. 2002-2003 and 1998-2007 are both permissible).
-</p>
-
-
-
-
-
-
-About and Definitions {#tab_about}
+About {#tab_about}
 ===========================================================
 
 Column {.tabset}
