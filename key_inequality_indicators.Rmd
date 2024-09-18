@@ -184,7 +184,15 @@ dt_pip <- joyn::joyn(
 dt_ineq <- joyn::joyn(
   dt_pip |> 
   fsubset(year >= 2000 & year <= 2022) |>
-    distinct(country_name, country_code, region_code, region_name, reporting_level, welfare_type) |>
+    distinct(country_name, 
+             country_code, 
+             region_code, 
+             region_name, 
+             reporting_level,
+             welfare_type, 
+             incgroup_current, 
+             fcv_current, 
+             ida_current) |>
     crossing(year = 2000:2022), 
   dt_pip |> 
   fsubset(year >= 2000 & year <= 2022), 
@@ -213,6 +221,16 @@ dt_ineq <- dt_ineq  |>
                              fifelse(giniever > 40, "High inequality (>40)", 
                                      "Moderate inequality (30-40)"))) |> 
   fmutate(country_count = 1L)
+
+# dt_ineq |>
+#   fmutate(
+#     giniever = gini,
+#     giniever = na.locf(giniever, na.rm = FALSE), # Forward fill
+#     giniever = na.fill(giniever, fill = NA) # Ensure no trailing NAs
+#   ) |>
+#   mutate(
+#     giniever = na.locf(giniever, fromLast = TRUE) # Backward fill
+#   ) |>
 ```
 
 
@@ -2280,6 +2298,17 @@ selectInput("high_ineq_region",
             ),
             selected = "Global")
 
+# Select Indicator
+selectInput("high_ineq_group_by",
+            label = "Group by:",
+            choices = c(
+              "Income groups",
+              "Regions", 
+              "FCV", 
+              "IDA"
+            ),
+            selected = "Income groups")
+
 
 # Select initial year
 # selectInput("initial_year",
@@ -2399,8 +2428,6 @@ renderPlotly({
                                   "Count: ", country_count, "\n", 
                                   "Ineq. type: ", ineq_type))
   
-
-
     p <- p |> 
     ggplot(aes(x     = year,
                y     = country_count, 
@@ -2423,45 +2450,85 @@ renderPlotly({
     ggplotly(p, 
              tooltip = "text")
 })
-# 
-# reactive({
-#   
-# dt <- dt_use()
-# dt <- dt[
-#   ,
-#   .(country_name, year, region_name, Indicator1, AnnualizedChange)
-# ]
-# setnames(
-#   dt, 
-#   old = c("country_name", "year", "region_name", "Indicator1", "AnnualizedChange"), 
-#   new = c("Country", "Year", "Region", str_to_title(input$ineq_indicator), "Annualized_Change")
-# )
-# # setnames(
-# #   dt, 
-# #   old = c("IndicatorX", "IndicatorY"), 
-# #   new = c(input$ineq_indicatorX, input$ineq_indicatorY)
-# # )
-# output$DownloadButtonChange <- downloadHandler(
-#   filename = function() {
-#     paste("PIP-key-ineq-indicators-change", Sys.Date(), ".csv", sep = "")
-#   },
-#   content = function(file) {
-#     write.csv(
-#       dt
-#       , file)
-#   }
-# )
-# 
-# })
+
 
 
 ```
 
+### Explanation
+```{r}
+renderPlotly({
+  gb <- switch(input$high_ineq_group_by, 
+               "Income groups" = "incgroup_current", 
+               "Regions"       = "region_code", 
+               "FCV"           = "fcv_current", 
+               "IDA"           = "ida_current", 
+               input$high_ineq_group_by)
+  
+  max_year <- max(dt_ineq$year)
+  
+  #gb <- c("ineq_type", "year", as.character(gb))
+  p <- dt_ineq |> 
+    fsubset(year == max_year) |> 
+    fmutate(ineq_type = factor(ineq_type, 
+                               level = c("High inequality (>40)", 
+                                         "Moderate inequality (30-40)",
+                                         "Low inequality (<30)")))
+  setnames(x   = p, 
+           old = c(as.character(gb)), 
+           new = "Group")
+  
+  p <- p |> 
+    fselect(ineq_type, year, Group, country_count) |>
+    fgroup_by(ineq_type, year, Group) |>
+    fnobs() |>
+    fungroup()
+    
+  p <- p |> 
+    fgroup_by(Group) |> 
+    fmutate(use          = country_count/sum(country_count), 
+            text_tooltip = paste0("Year: ", year, "\n",
+                                  "Share: ", round(use, 2), "\n", 
+                                  "Ineq. type: ", ineq_type, "\n", 
+                                  input$high_ineq_group_by, ": ", Group))
+    # fgroup_by(year) |>
+    #fsummarise(country_count = fsum(country_count)) |> 
+    #fungroup() |> 
+
+    # fmutate(text_tooltip = paste0("Year: ", year, "\n",
+    #                               "Count: ", country_count, "\n", 
+    #                               "Ineq. type: ", ineq_type))
+  
+  p <- p |>
+    ggplot(aes(x    = Group,
+               y    = use,
+               fill = ineq_type, 
+               text = text_tooltip)) +
+    geom_bar(stat     = 'identity',
+             position = 'stack') +
+    theme_classic() +  
+    labs(title = paste0("Share of economies in different inequality categories, by ", tolower(input$high_ineq_group_by)),
+         x = input$high_ineq_group_by,
+         y = "Share of economies, %") +
+    guides(color = "none") + 
+    scale_y_continuous(labels = scales::percent) +
+    guides(fill = guide_legend(title = "Inequality type"))
+  
+  ggplotly(p, 
+           tooltip = "text")
+})
+
+
+  
+# ggplot(dt_ineq, 
+#        aes(x = cat, y = value, fill = variable)) + 
+#   geom_bar(stat = 'identity', position = 'stack') #+ facet_grid(~ person)
+```
 
 
 <p style='text-align:justify;'></p>
 
-### Explanation
+
 
 <!-- go to the [definitions page](#definitions) -->
 <!-- go to [Definitions](#Definitions) -->
