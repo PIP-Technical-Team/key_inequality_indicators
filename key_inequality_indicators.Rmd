@@ -45,6 +45,7 @@ library("DT")
 library("zoo")
 library("RColorBrewer")
 library("collapse")
+library("highcharter")
 ```
 
 
@@ -63,6 +64,14 @@ options(
   ggplot2.discrete.fill = scale_fill_brewer_d
 )
 
+```
+
+```{r map-data}
+#load(here::here("data", "WB_geojson.Rdata"))
+pop <- pipr::get_aux(table = "pop")
+pop <- pop |> 
+  fmutate(year = as.numeric(levels(year))[year]) |> 
+  fsubset(year >= 2000)
 ```
 
 
@@ -176,46 +185,56 @@ dt_pip <- joyn::joyn(
   keep = "left", 
   match_type = "m:1",
   #y_vars_to_keep = "incgroup_current", 
-  reportvar = FALSE
+  reportvar = FALSE, 
+  verbose = FALSE
 )
 ```
 
 ```{r create-high-ineq}
-dt_ineq <- joyn::joyn(
-  dt_pip |> 
-  fsubset(year >= 2000 & year <= 2022) |>
-    distinct(country_name, 
-             country_code, 
-             region_code, 
-             region_name, 
-             reporting_level,
-             welfare_type, 
-             incgroup_current, 
-             fcv_current, 
-             ida_current) |>
-    crossing(year = 2000:2022), 
-  dt_pip |> 
-  fsubset(year >= 2000 & year <= 2022), 
-  match_type = "1:1",
-  by = c("country_code", 
-         "year", 
-         "reporting_level", 
-         "welfare_type"), 
-  verbose = FALSE)
+dt_ineq <- expand.grid(country_code = dt_pip[year >= 2000 & year <= 2022]$country_code |> unique(), 
+                               year = c(2000:2022)) |> 
+  joyn::joyn(y = dt_pip |> 
+               fsubset(year >= 2000 & year <= 2022) |> 
+               fselect(country_code, 
+                       year, 
+                       country_name, 
+                       reporting_level, 
+                       welfare_type, 
+                       region_name, 
+                       region_code, 
+                       gini, 
+                       incgroup_current, 
+                       fcv_current, 
+                       ida_current), 
+               match_type = "1:1", 
+               by = c("country_code", "year"), 
+               keep = "left", 
+  verbose = FALSE) |> 
+  arrange(country_code, year)
+  # dt_pip |> 
+  # fsubset(year >= 2000 & year <= 2022), 
+  # match_type = "1:1",
+  # by = c("country_code", 
+  #        "year"#, 
+  #        #"reporting_level"#, 
+  #        #"welfare_type"
+  #        ), 
+  # verbose = FALSE)
 
 dt_ineq <- dt_ineq  |>
   fgroup_by(country_code) |>
   fmutate(
     giniever = gini,
-    giniever = na.locf(giniever, na.rm = FALSE), # Forward fill
-    giniever = na.fill(giniever, fill = NA) # Ensure no trailing NAs
-  ) |>
-  fmutate(
-    giniever = na.locf(giniever, fromLast = TRUE) # Backward fill
-  ) |> 
+    giniever = na_locf(giniever), # Forward fill
+    #giniever = na.fill(giniever, fill = NA), # Ensure no trailing NAs, 
+    giniever = na_focb(giniever)) |>  # Backward fill
   fungroup() |> 
-  fselect( country_code, year, region_code, region_name, welfare_time, welfare_type, gini, 
-         incgroup_current, ida_current, fcv_current, giniever) |>
+  # fselect( country_code, year, region_code, region_name, 
+  #          welfare_time, 
+  #          welfare_type, 
+  #          reporting_level, 
+  #          gini, 
+  #        incgroup_current, ida_current, fcv_current, giniever) |>
   fmutate(highinequality = giniever > 0.40) |> 
   fmutate(ineq_type = fifelse(giniever < 30 , "Low inequality (<30)",
                              fifelse(giniever > 40, "High inequality (>40)", 
@@ -225,17 +244,29 @@ dt_ineq <- dt_ineq  |>
                                     levels = c("Low income", 
                                                "Lower middle income", 
                                                "Upper middle income", 
-                                               "High income")))
+                                               "High income"))) |> 
+  fmutate(incgroup_current = na_locf(incgroup_current),
+          incgroup_current = na_focb(incgroup_current),
 
-# dt_ineq |>
-#   fmutate(
-#     giniever = gini,
-#     giniever = na.locf(giniever, na.rm = FALSE), # Forward fill
-#     giniever = na.fill(giniever, fill = NA) # Ensure no trailing NAs
-#   ) |>
-#   mutate(
-#     giniever = na.locf(giniever, fromLast = TRUE) # Backward fill
-#   ) |>
+          ida_current = na_locf(ida_current),
+          ida_current = na_focb(ida_current),
+
+          fcv_current = na_locf(fcv_current),
+          fcv_current = na_focb(fcv_current),
+
+          region_code = na_locf(region_code),
+          region_code = na_focb(region_code))
+
+# add population var
+dt_ineq <- dt_ineq |> 
+  joyn::joyn(y = pop |> 
+               fsubset(data_level == "national") |> 
+               frename(pop = value), 
+             by = c("country_code", "year"), 
+             match_type = "1:1", 
+             keep = "left", 
+  verbose = FALSE)
+
 ```
 
 
@@ -1928,8 +1959,8 @@ selectInput("high_ineq_plot",
             label = "Show ineq. groups:",
             choices = c(
               "Over time",
-              "By selected group", 
-              "Across countries"
+              "Pop. over time",
+              "By selected group"
             ),
             selected = "Over time")
 
@@ -1960,17 +1991,17 @@ conditionalPanel(
               selected = "Income groups", 
               multiple = FALSE))
 
-# conditionalPanel(
-#   condition = "input.all_years_scatterplot == 'Custom'",
-#   selectInput("select_initial_year_scatterplot", 
-#               label = "Initial Year:",
-#               choices = dt_pip$year |> 
-#                 unique() |> 
-#                 sort(),
-#               selected = dt_pip$year |> 
-#                 min(), 
-#               multiple = FALSE)
-# )
+conditionalPanel(
+  condition = "input.high_ineq_plot == 'Pop. over time'",
+  selectInput("high_ineq_pop",
+              label = "Plot by:",
+              choices = c(
+                "Global",
+                dt_ineq$region_code |>
+                  unique()
+              ),
+              selected = "Global", 
+              multiple = FALSE))
 
 
 ```
@@ -1980,53 +2011,6 @@ Column {.tabset}
 
 ### Chart 
 
-
-```{r}
-# 
-# high_ineq_counts_plot <- reactive({
-#   
-#   p <- dt_ineq |> 
-#     fmutate(ineq_type = factor(ineq_type, 
-#                                level = c("High inequality (>40)", 
-#                                          "Moderate inequality (30-40)",
-#                                          "Low inequality (<30)"))) |> 
-#     fgroup_by(ineq_type, year) |> 
-#     fselect(ineq_type, year, country_count) |> 
-#     fnobs() |> 
-#     fungroup() |> 
-#     fmutate(text_tooltip = paste0("Year: ", year, "\n",
-#                                   "Count: ", country_count, "\n", 
-#                                   "Ineq. type: ", ineq_type))
-#   
-#   # if (!input$high_ineq_region == "Global") {
-#   #   p <- p |> 
-#   #     fsubset(region_code == !input$high_ineq_region)
-#   # }
-# 
-#     ggplot(aes(x     = year,
-#                y     = country_count, 
-#                fill  = ineq_type, 
-#                color = ineq_type, 
-#                text  = text_tooltip)) +
-#     geom_col(position = position_fill(), alpha = 0.8) +
-#     scale_y_continuous(labels = scales::percent) +
-#     geom_text(aes(label = country_count),
-#             position  = position_fill(vjust = .5), 
-#             color = "black") + 
-#     theme_classic() +  
-#     labs(title = paste0("Number of countries in each inequality category, ", input$high_ineq_region),
-#          x = "Year",
-#          y = "Economy count",  
-#          linetype = "Cylinder") +
-#     guides(color = "none") + 
-#     guides(fill = guide_legend(title = "Inequality type"))
-#   
-#     ggplotly(p, 
-#              tooltip = "text")
-#   
-# })
-
-```
 
 ```{r}
 
@@ -2073,7 +2057,9 @@ renderPlotly({
       
         ggplotly(p, 
                  tooltip = "text")
+        
   } else if (input$high_ineq_plot == "By selected group") {
+    
           gb <- switch(input$high_ineq_group_by, 
                "Income groups" = "incgroup_current", 
                "Regions"       = "region_code", 
@@ -2105,7 +2091,8 @@ renderPlotly({
             text_tooltip = paste0("Year: ", year, "\n",
                                   "Share: ", round(use, 2), "\n", 
                                   "Ineq. type: ", ineq_type, "\n", 
-                                  input$high_ineq_group_by, ": ", Group))
+                                  input$high_ineq_group_by, ": ", Group)) |> 
+    fungroup()
   
   p <- p |>
     ggplot(aes(x     = Group,
@@ -2117,7 +2104,7 @@ renderPlotly({
              position = 'stack', 
              alpha    = 0.8) +
     theme_classic() +  
-    labs(title = paste0("Share of economies in different inequality categories, by ", tolower(input$high_ineq_group_by)),
+    labs(title = paste0("Share of economies in different inequality categories, by ", input$high_ineq_group_by),
          x = input$high_ineq_group_by,
          y = "Share of economies, %") +
     guides(color = "none") + 
@@ -2126,7 +2113,56 @@ renderPlotly({
   
   ggplotly(p, 
            tooltip = "text")
+  
+  } else if (input$high_ineq_plot == "Pop. over time"){
+    
+      if (!input$high_ineq_pop == "Global") {
+        p <- dt_ineq |>
+          fsubset(region_code == as.character(input$high_ineq_pop))
+      } else {
+        p <- dt_ineq
       }
+        p <- p |> 
+          fmutate(ineq_type = factor(ineq_type, 
+                                     level = c("High inequality (>40)", 
+                                               "Moderate inequality (30-40)",
+                                               "Low inequality (<30)"))) |> 
+          fgroup_by(ineq_type, year) |> 
+          #fselect(ineq_type, year, country_count) |> 
+          fsummarise(pop = fsum(pop)) |> 
+          fungroup() |> 
+          fgroup_by(year) |> 
+          fmutate(popsh = round(100*pop/fsum(pop), 0)) |> 
+          fungroup() |> 
+          fselect(year, popsh, ineq_type) |> 
+          fmutate(text_tooltip = paste0("Year: ", year, "\n",
+                                        "Pop share: ", popsh, "\n", 
+                                        "Ineq. type: ", ineq_type)) |> 
+          fungroup()
+      
+        p <- p |> 
+        ggplot(aes(x     = year,
+                   y     = popsh, 
+                   fill  = ineq_type, 
+                   color = ineq_type, 
+                   text  = text_tooltip)) +
+        geom_col(position = position_fill(), alpha = 0.8) +
+        scale_y_continuous(labels = scales::percent) +
+        geom_text(aes(label = popsh),
+                position  = position_fill(vjust = .5), 
+                color = "black") + 
+        theme_classic() +  
+        labs(title = paste0("Share of population in each inequality category, ", input$high_ineq_pop),
+             x = "Year",
+             y = "Population share") +
+        guides(color = "none") + 
+        guides(fill = guide_legend(title = "Inequality type"))
+      
+        ggplotly(p, 
+                 tooltip = "text")
+
+    
+  }
 
 })
 
@@ -2136,9 +2172,17 @@ renderPlotly({
 
 ### Explanation
 ```{r}
-# renderPlotly({
-# 
-# })
+renderHighchart({
+  highchart(type = "map") |>
+  hc_chart(backgroundColor = "#161C20") |>
+  hc_add_series(
+    mapData = countries,
+    data    = dt_ineq,
+    joinBy = c("ISO_A3", "country_code"),
+    value = 'highinequality'
+
+  ) 
+})
 
 
 ```
