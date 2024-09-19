@@ -1118,7 +1118,9 @@ output$DownloadButtonTrends2 <- downloadHandler(
   },
   content = function(file) {
     write.csv(
-      dt_trend_plot2()
+      dt_trend_plot2() |> 
+        frename(economy_code = country_code, 
+                economy_name = country_name)
       , file)
   }
 )
@@ -1392,7 +1394,8 @@ output$DownloadButtonChange <- downloadHandler(
   },
   content = function(file) {
     write.csv(
-      dt
+      dt |> 
+        frename(Economy = Country)
       , file)
   }
 )
@@ -1956,7 +1959,8 @@ output$DownloadButtonScatterplot <- downloadHandler(
   },
   content = function(file) {
     write.csv(
-      dt
+      dt |> 
+        frename(economy_name = country_name)
       , file)
   }
 )
@@ -2254,8 +2258,8 @@ output$DownloadButtonHighIneq <- downloadHandler(
   },
   content = function(file) {
     write.csv(dt_ineq |> 
-                fselect(country_code, 
-                        country_name, 
+                fselect(economy_code = country_code, 
+                        economy_name = country_name, 
                         region_code, 
                         region_name, 
                         year, 
@@ -2281,15 +2285,17 @@ output$DownloadButtonHighIneq <- downloadHandler(
 
 
 
-<p style='text-align:justify;'>As a measure of shared prosperity, the World Bank tracks the Prosperity Gap and the number of economies with high inequality. This page reports the latter. An economy is considered high inequality if it has a Gini index greater than 40, based on the most recent household survey. In addition, the charts also report the number of economies with moderate (Gini index between 30 and 40, inclusive) and low inequality (Gini index less than 30). The Gini index is a measure of inequality that is bounded between 0 (a society in which everyone has the same income and hence perfect equality) and 100 (where one person has all the income and hence the most unequal society). The high inequality indicator is based on either income or consumption data, depending on the welfare measure adopted by each economy. Most high-income countries and countries in Latin America and the Caribbean use income, while the rest of the world uses consumption. For a detailed discussion, see Chapter 2 of Poverty, Prosperity, and Planet 2024 report.</p>
+<p style='text-align:justify;'>As a measure of shared prosperity, the World Bank tracks the Prosperity Gap and the number of economies with high inequality. This page reports the latter. An economy is considered high inequality if it has a Gini index greater than 40, based on the most recent household survey. In addition, the charts also report the number of economies with moderate (Gini index between 30 and 40, inclusive) and low inequality (Gini index less than 30). The Gini index is a measure of inequality that is bounded between 0 (a society in which everyone has the same income and hence perfect equality) and 100 (where one person has all the income and hence the most unequal society). The high inequality indicator is based on either income or consumption data, depending on the welfare measure adopted by each economy. Most high-income countries and countries in Latin America and the Caribbean use income, while the rest of the world uses consumption. For a detailed discussion, see Chapter 2 of Poverty, Prosperity, and Planet Report 2024.</p>
 
  
 
-<p style='text-align:justify;'>Not all countries have a survey every year. Hence, to calculate the high inequality index, Gini index from the most recent survey is used. The charts report the number of economies with high inequality since 2000. If a country does not have a survey in the early 2000s, their first survey after 2000 is used for those years. Economies without any surveys since 2000 have been excluded from the sample.</p>
+<p style='text-align:justify;'>Not all countries have a survey every year. Hence, to calculate the number of countries with high inequality, the Gini index from the most recent survey is used. The charts report the number of economies with high inequality since 2000. If a country does not have a survey in the early 2000s, their first survey after 2000 is used for those years. Economies without any surveys since 2000 have been excluded from the sample.</p>
 
  
 
-<p style='text-align:justify;'>The first chart reports the number of economies in each inequality group. Users can visualize this stacked bar chart for all economies or for selected region. The second chart, shown when “Pop. over time” is selected, shows the share of the population in each inequality group. The third chart, shown when choosing “By selected group”, reports the share of economies in each inequality group for the latest year, disaggregated by the user’s chosen grouping (e.g. by the World Bank’s 2024 income group classifications, regions, etc.).</p>
+<p style='text-align:justify;'>The first chart reports the number of economies in each inequality group. Users can visualize this stacked bar chart for all economies or for selected region. The second chart, shown when “Pop. over time” is selected, shows the share of the population in each inequality group. The third chart, shown when choosing “By selected group”, reports the share of economies in each inequality group for the latest year, disaggregated by the user’s chosen grouping (e.g.by the World Bank’s 2024 income group classifications, regions, etc.). The classification is held fixed for the data year 2022 using World Bank's FY 2024 income classifications.
+
+<!-- The income group classification, using the current 2025 fiscal year World Bank classification, is held fixed at the most recent, current classifications rather than using the historical classification. To find out more about the classifications, read [this blog](https://blogs.worldbank.org/en/opendata/world-bank-country-classifications-by-income-level-for-2024-2025) or go see the updated classifications [here](https://datahelpdesk.worldbank.org/knowledgebase/articles/906519-world-bank-country-and-lending-groups?_gl=1*vq2f13*_gcl_au*MTk0MzM0NjcuMTcyMTY2NjQ2Ng..).</p> -->
 
 
 
@@ -2478,7 +2484,7 @@ make_table_across_countries <- function(
   
   # Prepare Data ----
   selected_cols <- c(
-    "Country",
+    "Economy",
     "Region",
     "Year",
     "Level",
@@ -2495,7 +2501,7 @@ make_table_across_countries <- function(
   setnames(
     dt,
     old = c("country_name", "region_code", "comparable_spell", "reporting_level", "welfare_type", "top_10_bottom_40_ratio", "top_20_bottom_20_ratio"),
-    new = c("country", "region", "spell", "level", "type", "t10_b40", "t20_b20")                           # Clean variable names
+    new = c("economy", "region", "spell", "level", "type", "t10_b40", "t20_b20")                           # Clean variable names
   )
   setnames(
     dt,
@@ -2504,7 +2510,7 @@ make_table_across_countries <- function(
   
   
   dt <- dt[
-    Country %chin% country_name_vec,         # filter by country
+    Economy %chin% country_name_vec,         # filter by country
     ..selected_cols                             # Select id vars and inequality indicators
   ]
   
@@ -2526,7 +2532,7 @@ make_table_across_countries <- function(
   if(years_selected == "Latest"){
     dt <- dt[, 
              .SD[which.max(Year)], 
-             by = Country]
+             by = Economy]
   }
   if(years_selected == "Custom"){
 
@@ -2540,7 +2546,7 @@ make_table_across_countries <- function(
   }
   
   
-  setorder(dt, Country, Region, -Year, Level, Type)
+  setorder(dt, Economy, Region, -Year, Level, Type)
   
   # setnames(
   #   dt, 
