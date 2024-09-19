@@ -238,7 +238,8 @@ dt_pip <- joyn::joyn(
 #                verbose = FALSE, 
 #                reportvar = FALSE) |> 
 #   arrange(country_code, year)
-dt_ineq <- haven::read_dta(file = "data/gini_intermediate_all 1.dta")
+dt_ineq <- haven::read_dta(file = "data/gini_intermediate_all 1.dta") |> 
+  arrange(country_code, year)
 
   # dt_pip |> 
   # fsubset(year >= 2000 & year <= 2022), 
@@ -254,32 +255,34 @@ dt_ineq <- dt_ineq  |>
   
   
   
-  # fgroup_by(country_code) |>
-  # fmutate(
-  #   giniever = gini,
-  #   giniever = na_locf(giniever), # Forward fill
-  #   #giniever = na.fill(giniever, fill = NA), # Ensure no trailing NAs, 
-  #   giniever = na_focb(giniever)) |>  # Backward fill
-  # fungroup() |> 
-  # 
+  fgroup_by(country_code) |>
+  fmutate(
+    giniever = gini,
+    giniever = na_locf(giniever), # Forward fill
+    #giniever = na.fill(giniever, fill = NA), # Ensure no trailing NAs, 
+    giniever = na_focb(giniever)) |>  # Backward fill
+  #fungroup() |> 
   
   
-  # fselect( country_code, year, region_code, region_name, 
-  #          welfare_time, 
-  #          welfare_type, 
-  #          reporting_level, 
-  #          gini, 
-  #        incgroup_current, ida_current, fcv_current, giniever) |>
+  
+  fselect( country_code, year, region_code, region_name,
+           welfare_time,
+           welfare_type,
+           #reporting_level,
+           gini,
+         incgroup_current, ida_current, fcv_current, giniever) |> 
   fmutate(highinequality = giniever > 40) |> 
   fmutate(ineq_type = fifelse(giniever < 30 , "Low inequality (<30)",
                              fifelse(giniever > 40, "High inequality (>40)", 
                                      "Moderate inequality (30-40)"))) |> 
   fmutate(country_count = 1L) |> 
   fmutate(incgroup_current = factor(incgroup_current, 
-                                    levels = c("Low income", 
-                                               "Lower middle income", 
-                                               "Upper middle income", 
-                                               "High income"))) |> 
+                                    levels = c("LIC", 
+                                               "LMIC", 
+                                               "UMIC", 
+                                               "HIC"))) |> 
+  fmutate(region_code = fifelse(region_code == "", NA, region_code)) |> 
+  fmutate(incgroup_current = fifelse(incgroup_current == "", NA, incgroup_current)) |> 
   fmutate(incgroup_current = na_locf(incgroup_current),
           incgroup_current = na_focb(incgroup_current),
 
@@ -290,7 +293,15 @@ dt_ineq <- dt_ineq  |>
           fcv_current = na_focb(fcv_current),
 
           region_code = na_locf(region_code),
-          region_code = na_focb(region_code))
+          region_code = na_focb(region_code)) |>
+  fungroup()
+  # fselect(-c(incgroup_current, "ida_current", "fcv_current"))
+  # joyn::joyn(y = dt_class |> fselect(country_code = code, region_code = region_pip, incgroup_current, ida_current, fcv_current) |> 
+  #              funique(), 
+  #            keep = "left", 
+  #            match_type = "m:1", 
+  #            by = c("country_code"))
+
 
 # add population var
 dt_ineq <- dt_ineq |> 
