@@ -1,0 +1,12 @@
+name: key_inequality_indicators-test
+title: key_inequality_indicators-test
+username: zprinsloo
+account: zprinsloo
+server: w0lxdrconn01
+hostUrl: https://w0lxdrconn01/__api__
+appId: 209
+bundleId: 607
+url: https://w0lxdrconn01/ineq-indicators-test/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
