@@ -209,7 +209,8 @@ dt_ineq <- expand.grid(country_code = dt_pip[year >= 2000 & year <= 2022]$countr
                match_type = "1:1", 
                by = c("country_code", "year"), 
                keep = "left", 
-  verbose = FALSE) |> 
+               verbose = FALSE, 
+               reportvar = FALSE) |> 
   arrange(country_code, year)
   # dt_pip |> 
   # fsubset(year >= 2000 & year <= 2022), 
@@ -235,7 +236,7 @@ dt_ineq <- dt_ineq  |>
   #          reporting_level, 
   #          gini, 
   #        incgroup_current, ida_current, fcv_current, giniever) |>
-  fmutate(highinequality = giniever > 0.40) |> 
+  fmutate(highinequality = giniever > 40) |> 
   fmutate(ineq_type = fifelse(giniever < 30 , "Low inequality (<30)",
                              fifelse(giniever > 40, "High inequality (>40)", 
                                      "Moderate inequality (30-40)"))) |> 
@@ -265,7 +266,8 @@ dt_ineq <- dt_ineq |>
              by = c("country_code", "year"), 
              match_type = "1:1", 
              keep = "left", 
-  verbose = FALSE)
+             verbose = FALSE, 
+             reportvar = FALSE)
 
 ```
 
@@ -1981,7 +1983,7 @@ conditionalPanel(
 conditionalPanel(
   condition = "input.high_ineq_plot == 'By selected group' ",
   selectInput("high_ineq_group_by",
-              label = "Plot by:",
+              label = "Group by:",
               choices = c(
                 "Income groups",
                 "Regions", 
@@ -2003,6 +2005,11 @@ conditionalPanel(
               selected = "Global", 
               multiple = FALSE))
 
+
+downloadButtonRmd(
+  outputId = "DownloadButtonHighIneq", 
+  label = "csv"
+)
 
 ```
 
@@ -2168,28 +2175,29 @@ renderPlotly({
 
 
 
+output$DownloadButtonHighIneq <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators-high-ineq", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(dt_ineq, file)
+  }
+)
+
+
 ```
 
 ### Explanation
-```{r}
-renderHighchart({
-  highchart(type = "map") |>
-  hc_chart(backgroundColor = "#161C20") |>
-  hc_add_series(
-    mapData = countries,
-    data    = dt_ineq,
-    joinBy = c("ISO_A3", "country_code"),
-    value = 'highinequality'
-
-  ) 
-})
 
 
-```
 
+<p style='text-align:justify;'>The high inequality indicator on within-economy inequality uses the gini index as the measure of inequality and classifies economies with a gini greater than 40 as highly unequal. Economies with a gini below 30 is classified as low inequality, while economies with a gini index between 30 and 40 are classified as having moderate inequality. Economies without any surveys since 2000 have been excluded from the sample.</p>
+
+<p style='text-align:justify;'>The first chart gives the number of economies per year within each inequality class. Users can visualize this stacked bar chart for all economies or for a selected region. The second chart, shown when "Pop. over time" is selected, shows the share of the population that can be found within each inequality class. The third chart, shown when choosing "By selected group", shows the share of economies within each inequality class, disaggregated by the user's chosen grouping (e.g. by the World Bank's 2024 income group classifications, regions, etc.). </p>
 
 <p style='text-align:justify;'></p>
 
+<p style='text-align:justify;'></p>
 
 
 <!-- go to the [definitions page](#definitions) -->
