@@ -68,7 +68,7 @@ options(
 
 ```{r map-data}
 #load(here::here("data", "WB_geojson.Rdata"))
-pop <- pipr::get_aux(table = "pop")
+pop <- pipr::get_aux(table = "pop", server = "qa")
 pop <- pop |> 
   fmutate(year = as.numeric(levels(year))[year]) |> 
   fsubset(year >= 2000)
@@ -81,7 +81,7 @@ source_text <- paste("Source: World Bank, Poverty and Inequality Platform (versi
 # Total pip output
 
 # Step 1: data ----
-dt_pip <- pipr::get_stats() |> 
+dt_pip <- pipr::get_stats(server = "qa") |> 
   qDT()# as data.table
 dt_pip[
   , 
@@ -190,28 +190,56 @@ dt_pip <- joyn::joyn(
 )
 ```
 
+```{r pfw}
+# pfw <- haven::read_dta("data/pfw_v11.dta") |>
+#   filter(survey_coverage == "N" | code %in% c("ARG")) |>
+#   filter(display_cp == 1) |>
+#   rename(country_code = code, year_temp  = rep_year) |>
+#   mutate(welfare_type = ifelse(datatype %in% c("C", "c"), "consumption", "income")) |>
+#   select(-year) |>
+#   rename(year = year_temp) |>
+#   distinct()
+# 
+# data <- left_join(dt_pip, 
+#                   pfw, 
+#                   by = c("country_code", "year", "welfare_type"),
+#                   reportvar = F)
+# 
+# data <- data |>
+#   filter(year >= 2000) |>
+#   group_by(country_code) |>
+#   mutate(weightall = 1 / n()) |>
+#   group_by(country_code, welfare_type) |>
+#   mutate(weighttype = 1 / n()) |>
+#   ungroup()
+```
+
+
 ```{r create-high-ineq}
-dt_ineq <- expand.grid(country_code = dt_pip[year >= 2000 & year <= 2022]$country_code |> unique(), 
-                               year = c(2000:2022)) |> 
-  joyn::joyn(y = dt_pip |> 
-               fsubset(year >= 2000 & year <= 2022) |> 
-               fselect(country_code, 
-                       year, 
-                       country_name, 
-                       reporting_level, 
-                       welfare_type, 
-                       region_name, 
-                       region_code, 
-                       gini, 
-                       incgroup_current, 
-                       fcv_current, 
-                       ida_current), 
-               match_type = "1:1", 
-               by = c("country_code", "year"), 
-               keep = "left", 
-               verbose = FALSE, 
-               reportvar = FALSE) |> 
-  arrange(country_code, year)
+# dt_ineq <- expand.grid(country_code = data$country_code |> unique(), 
+#                                year = c(2000:2022)) |> 
+#   joyn::joyn(y = data |> #dt_pip |> 
+#                # fsubset(year >= 2000 & year <= 2022) |> 
+#                fsubset(reporting_level == "national" | country_code == "ARG") |> 
+#                fselect(country_code, 
+#                        year, 
+#                        country_name, 
+#                        reporting_level, 
+#                        welfare_type, 
+#                        region_name, 
+#                        region_code, 
+#                        gini, 
+#                        incgroup_current, 
+#                        fcv_current, 
+#                        ida_current), 
+#                match_type = "1:1", 
+#                by = c("country_code", "year"), 
+#                keep = "left", 
+#                verbose = FALSE, 
+#                reportvar = FALSE) |> 
+#   arrange(country_code, year)
+dt_ineq <- haven::read_dta(file = "data/gini_intermediate_all 1.dta")
+
   # dt_pip |> 
   # fsubset(year >= 2000 & year <= 2022), 
   # match_type = "1:1",
@@ -223,13 +251,19 @@ dt_ineq <- expand.grid(country_code = dt_pip[year >= 2000 & year <= 2022]$countr
   # verbose = FALSE)
 
 dt_ineq <- dt_ineq  |>
-  fgroup_by(country_code) |>
-  fmutate(
-    giniever = gini,
-    giniever = na_locf(giniever), # Forward fill
-    #giniever = na.fill(giniever, fill = NA), # Ensure no trailing NAs, 
-    giniever = na_focb(giniever)) |>  # Backward fill
-  fungroup() |> 
+  
+  
+  
+  # fgroup_by(country_code) |>
+  # fmutate(
+  #   giniever = gini,
+  #   giniever = na_locf(giniever), # Forward fill
+  #   #giniever = na.fill(giniever, fill = NA), # Ensure no trailing NAs, 
+  #   giniever = na_focb(giniever)) |>  # Backward fill
+  # fungroup() |> 
+  # 
+  
+  
   # fselect( country_code, year, region_code, region_name, 
   #          welfare_time, 
   #          welfare_type, 
@@ -1994,6 +2028,16 @@ conditionalPanel(
               multiple = FALSE))
 
 conditionalPanel(
+  condition = "input.high_ineq_plot == 'By selected group' ",
+  selectInput("high_ineq_group_by_year",
+              label = "Select year:",
+              choices = dt_ineq$year |> unique(),
+              selected = 2022, 
+              multiple = FALSE))
+
+
+
+conditionalPanel(
   condition = "input.high_ineq_plot == 'Pop. over time'",
   selectInput("high_ineq_pop",
               label = "Plot by:",
@@ -2055,7 +2099,7 @@ renderPlotly({
                 position  = position_fill(vjust = .5), 
                 color = "black") + 
         theme_classic() +  
-        labs(title = paste0("Number of countries in each inequality category, ", input$high_ineq_region),
+        labs(title = paste0("Number of economies in each inequality category, ", input$high_ineq_region),
              x = "Year",
              y = "Economy count",  
              linetype = "Cylinder") +
@@ -2077,7 +2121,7 @@ renderPlotly({
   max_year <- max(dt_ineq$year)
   
   p <- dt_ineq |> 
-    fsubset(year == max_year) |> 
+    fsubset(year == input$high_ineq_group_by_year) |> 
     fmutate(ineq_type = factor(ineq_type, 
                                level = c("High inequality (>40)", 
                                          "Moderate inequality (30-40)",
@@ -2191,9 +2235,19 @@ output$DownloadButtonHighIneq <- downloadHandler(
 
 
 
-<p style='text-align:justify;'>The high inequality indicator on within-economy inequality uses the gini index as the measure of inequality and classifies economies with a gini greater than 40 as highly unequal. Economies with a gini below 30 is classified as low inequality, while economies with a gini index between 30 and 40 are classified as having moderate inequality. Economies without any surveys since 2000 have been excluded from the sample.</p>
 
-<p style='text-align:justify;'>The first chart gives the number of economies per year within each inequality class. Users can visualize this stacked bar chart for all economies or for a selected region. The second chart, shown when "Pop. over time" is selected, shows the share of the population that can be found within each inequality class. The third chart, shown when choosing "By selected group", shows the share of economies within each inequality class, disaggregated by the user's chosen grouping (e.g. by the World Bank's 2024 income group classifications, regions, etc.). </p>
+<p style='text-align:justify;'>As a measure of shared prosperity, the World Bank tracks the Prosperity Gap and the number of economies with high inequality. This page reports the latter. An economy is considered high inequality if it has a Gini index greater than 40, based on the most recent household survey. In addition, the charts also report the number of economies with moderate (Gini index between 30 and 40, inclusive) and low inequality (Gini index less than 30). The Gini index is a measure of inequality that is bounded between 0 (a society in which everyone has the same income and hence perfect equality) and 100 (where one person has all the income and hence the most unequal society). The high inequality indicator is based on either income or consumption data, depending on the welfare measure adopted by each economy. Most high-income countries and countries in Latin America and the Caribbean use income, while the rest of the world uses consumption. For a detailed discussion, see Chapter 2 of Poverty, Prosperity, and Planet 2024 report.</p>
+
+ 
+
+<p style='text-align:justify;'>Not all countries have a survey every year. Hence, to calculate the high inequality index, Gini index from the most recent survey is used. The charts report the number of economies with high inequality since 2000. If a country does not have a survey in the early 2000s, their first survey after 2000 is used for those years. Economies without any surveys since 2000 have been excluded from the sample.</p>
+
+ 
+
+<p style='text-align:justify;'>The first chart reports the number of economies in each inequality group. Users can visualize this stacked bar chart for all economies or for selected region. The second chart, shown when “Pop. over time” is selected, shows the share of the population in each inequality group. The third chart, shown when choosing “By selected group”, reports the share of economies in each inequality group for the latest year, disaggregated by the user’s chosen grouping (e.g. by the World Bank’s 2024 income group classifications, regions, etc.).</p>
+
+
+
 
 <p style='text-align:justify;'></p>
 
