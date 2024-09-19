@@ -49,26 +49,10 @@ library("highcharter")
 ```
 
 
-```{r colorbrewer-defaults}
-
-scale_colour_brewer_d <- function(..., palette = "Dark2") {
-  scale_colour_brewer(..., palette = palette )
-}
-
-scale_fill_brewer_d <- function(..., palette = "Dark2") {
-  scale_fill_brewer(..., palette = palette)
-}
-
-options(
-  ggplot2.discrete.colour = scale_colour_brewer_d,
-  ggplot2.discrete.fill = scale_fill_brewer_d
-)
-
-```
 
 ```{r map-data}
 #load(here::here("data", "WB_geojson.Rdata"))
-pop <- pipr::get_aux(table = "pop", server = "qa")
+pop <- pipr::get_aux(table = "pop")
 pop <- pop |> 
   fmutate(year = as.numeric(levels(year))[year]) |> 
   fsubset(year >= 2000)
@@ -81,7 +65,7 @@ source_text <- paste("Source: World Bank, Poverty and Inequality Platform (versi
 # Total pip output
 
 # Step 1: data ----
-dt_pip <- pipr::get_stats(server = "qa") |> 
+dt_pip <- pipr::get_stats() |> 
   qDT()# as data.table
 dt_pip[
   , 
@@ -124,6 +108,9 @@ region_matching <- unique(
     by = region_code
   ]
 )
+region_matching <- rowbind(region_matching, 
+                           data.table(region_code = "Global", 
+                                      region_name = "Global"))
 # Exclude double rows
 dt_pip <- 
   dt_pip[, 
@@ -2000,12 +1987,35 @@ High inequality
 Sidebar {.sidebar data-width=200}
 -----------------------------------------------------------------------
 
+
+```{r colorbrewer-defaults}
+# Extract the colors of the Dark2 palette
+dark2_palette <- brewer.pal(n = 3, name = "Dark2")
+
+# Rearrange the colors (B, C, A)
+custom_palette <- dark2_palette[c(2, 3, 1)]
+# 
+# scale_colour_brewer_d <- function(..., palette = "Dark2") {
+#   scale_colour_brewer(..., palette = custom_palette )
+# }
+# 
+# scale_fill_brewer_d <- function(..., palette = "Dark2") {
+#   scale_fill_brewer(..., palette = custom_palette)
+# }
+# 
+# options(
+#   ggplot2.discrete.colour = scale_colour_brewer_d,
+#   ggplot2.discrete.fill = scale_fill_brewer_d
+# )
+
+```
+
 ```{r sidebar-plot-ineq}
 # Select Plot
 selectInput("high_ineq_plot",
             label = "Show ineq. groups:",
             choices = c(
-              "Over time",
+              "Number over time",
               "Pop. over time",
               "By selected group"
             ),
@@ -2013,13 +2023,13 @@ selectInput("high_ineq_plot",
 
 # Select Indicator
 conditionalPanel(
-  condition = "input.high_ineq_plot == 'Over time'",
+  condition = "input.high_ineq_plot == 'Number over time'",
   selectInput("high_ineq_region",
               label = "Plot by:",
               choices = c(
                 "Global",
-                dt_ineq$region_code |>
-                  unique()
+                c(dt_ineq$region_code |>
+                  unique())[order(unique(dt_ineq$region_code))]
               ),
               selected = "Global", 
               multiple = FALSE))
@@ -2078,7 +2088,7 @@ Column {.tabset}
 
 renderPlotly({
   
-  if (input$high_ineq_plot == "Over time") {
+  if (input$high_ineq_plot == "Number over time") {
       if (!input$high_ineq_region == "Global") {
         p <- dt_ineq |>
           fsubset(region_code == as.character(input$high_ineq_region))
@@ -2096,7 +2106,8 @@ renderPlotly({
         fungroup() |> 
         fmutate(text_tooltip = paste0("Year: ", year, "\n",
                                       "Count: ", country_count, "\n", 
-                                      "Ineq. type: ", ineq_type))
+                                      "Ineq. group: ", ineq_type)) |> 
+          fmutate(country_count = as.double(country_count))
       
         p <- p |> 
         ggplot(aes(x     = year,
@@ -2104,18 +2115,20 @@ renderPlotly({
                    fill  = ineq_type, 
                    color = ineq_type, 
                    text  = text_tooltip)) +
-        geom_col(position = position_fill(), alpha = 0.8) +
-        scale_y_continuous(labels = scales::percent) +
+        geom_col(position = position_stack(), alpha = 0.8) +
         geom_text(aes(label = country_count),
-                position  = position_fill(vjust = .5), 
+                position  = position_stack(vjust = .5), 
                 color = "black") + 
+  #scale_y_continuous(limits = c(0, 175)) +
         theme_classic() +  
-        labs(title = paste0("Number of economies in each inequality category, ", input$high_ineq_region),
+        labs(title = paste0("Number of economies in each inequality category, ", 
+                            region_matching[region_code == input$high_ineq_region, ]$region_name),
              x = "Year",
-             y = "Economy count",  
-             linetype = "Cylinder") +
+             y = "Number of economies") +
         guides(color = "none") + 
-        guides(fill = guide_legend(title = "Inequality type"))
+        guides(fill = guide_legend(title = "Inequality group")) + 
+  scale_fill_manual(values = custom_palette) +
+  scale_color_manual(values = custom_palette)
       
         ggplotly(p, 
                  tooltip = "text")
@@ -2152,7 +2165,7 @@ renderPlotly({
     fmutate(use          = country_count/sum(country_count), 
             text_tooltip = paste0("Year: ", year, "\n",
                                   "Share: ", round(use, 2), "\n", 
-                                  "Ineq. type: ", ineq_type, "\n", 
+                                  "Ineq. group: ", ineq_type, "\n", 
                                   input$high_ineq_group_by, ": ", Group)) |> 
     fungroup()
   
@@ -2171,7 +2184,9 @@ renderPlotly({
          y = "Share of economies, %") +
     guides(color = "none") + 
     scale_y_continuous(labels = scales::percent) +
-    guides(fill = guide_legend(title = "Inequality type"))
+    guides(fill = guide_legend(title = "Inequality group")) + 
+  scale_fill_manual(values = custom_palette) +
+  scale_color_manual(values = custom_palette)
   
   ggplotly(p, 
            tooltip = "text")
@@ -2199,7 +2214,7 @@ renderPlotly({
           fselect(year, popsh, ineq_type) |> 
           fmutate(text_tooltip = paste0("Year: ", year, "\n",
                                         "Pop share: ", popsh, "\n", 
-                                        "Ineq. type: ", ineq_type)) |> 
+                                        "Ineq. group: ", ineq_type)) |> 
           fungroup()
       
         p <- p |> 
@@ -2214,11 +2229,14 @@ renderPlotly({
                 position  = position_fill(vjust = .5), 
                 color = "black") + 
         theme_classic() +  
-        labs(title = paste0("Share of population in each inequality category, ", input$high_ineq_pop),
+        labs(title = paste0("Share of population in each inequality category, ", 
+                            region_matching[region_code == input$high_ineq_pop, ]$region_name),
              x = "Year",
              y = "Population share") +
         guides(color = "none") + 
-        guides(fill = guide_legend(title = "Inequality type"))
+        guides(fill = guide_legend(title = "Inequality group")) + 
+  scale_fill_manual(values = custom_palette) +
+  scale_color_manual(values = custom_palette)
       
         ggplotly(p, 
                  tooltip = "text")
@@ -2235,7 +2253,23 @@ output$DownloadButtonHighIneq <- downloadHandler(
     paste("PIP-key-ineq-indicators-high-ineq", Sys.Date(), ".csv", sep = "")
   },
   content = function(file) {
-    write.csv(dt_ineq, file)
+    write.csv(dt_ineq |> 
+                fselect(country_code, 
+                        country_name, 
+                        region_code, 
+                        region_name, 
+                        year, 
+                        welfare_time, 
+                        welfare_type, 
+                        survey_gini = gini, 
+                        gini_for_inequality_groups = giniever, 
+                        incgroup_current, 
+                        ida_current, 
+                        fcv_current, 
+                        population,
+                        survey_coverage, 
+                        comparable_spell), 
+              file)
   }
 )
 
