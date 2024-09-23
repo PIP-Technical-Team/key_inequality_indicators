@@ -2712,7 +2712,7 @@ Column {.tabset}
 
 <p style='text-align:justify;'>For more details on the methodology, please visit the [PIP Methodology Handbook](https://datanalytics.worldbank.org/PIP-Methodology/) and the [Global Poverty Monitoring Technical Notes](https://pip.worldbank.org/publication). For any questions regarding the data or methodology, please contact pip@worldbank.org.</p>
 
-<p style='text-align:justify;'>Please cite the data as:  World Bank. (2023). Poverty and Inequality Platform (version 20230919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessed `r today()`. </p>
+<p style='text-align:justify;'>Please cite the data as:  World Bank. (2024). Poverty and Inequality Platform (version 20240919_2017) [Data set]. World Bank Group. www.pip.worldbank.org. Accessed `r today()`. </p>
 
 
 
