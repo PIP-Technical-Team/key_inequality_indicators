@@ -307,10 +307,17 @@ dt_ineq <- dt_ineq |>
 
 ```{r load-data-functions}
 
-downloadButtonRmd <- function (outputId, label = "Download", class = NULL, ...)  {
-     tags$a(id = outputId, class = paste("btn btn-default shiny-download-link", 
-        class), href = "", target = "_blank", download = NA, 
-        icon("download"), label, ...)
+downloadButtonRmd <- function(outputId, 
+                              label = "Download", 
+                              class = NULL, ...)  {
+     tags$a(id = outputId, 
+            class = paste("btn btn-default shiny-download-link", 
+                          class), 
+            href = "", 
+            target = "_blank", 
+            download = NA, 
+            icon("download"), 
+            label, ...)
  }
 
 title_function <- function(ind){
@@ -2077,8 +2084,13 @@ conditionalPanel(
 
 downloadButtonRmd(
   outputId = "DownloadButtonHighIneq", 
-  label = "csv"
+  label    = "CSV"
 )
+
+# downloadButtonRmd(
+#   outputId = "DownloadButtonScatterplot", 
+#   label = "CSV"
+# )
 
 ```
 
@@ -2252,14 +2264,26 @@ renderPlotly({
 
 
 
+output$DownloadButtonScatterplot <- downloadHandler(
+  filename = function() {
+    paste("PIP-key-ineq-indicators-scatterplot", Sys.Date(), ".csv", sep = "")
+  },
+  content = function(file) {
+    write.csv(
+      dt |> 
+        frename(economy_name = country_name)
+      , file)
+  }
+)
+
+
 output$DownloadButtonHighIneq <- downloadHandler(
   filename = function() {
-    paste("PIP-key-ineq-indicators-high-ineq", Sys.Date(), ".csv", sep = "")
+    paste("PIP-key-ineq-indicators-high-ineq-", Sys.Date(), ".csv", sep = "")
   },
   content = function(file) {
     write.csv(dt_ineq |> 
                 fselect(economy_code = country_code, 
-                        economy_name = country_name, 
                         region_code, 
                         region_name, 
                         year, 
@@ -2270,9 +2294,10 @@ output$DownloadButtonHighIneq <- downloadHandler(
                         incgroup_current, 
                         ida_current, 
                         fcv_current, 
-                        population,
-                        survey_coverage, 
-                        comparable_spell), 
+                        pop#,
+                        #survey_coverage, 
+                        #comparable_spell
+                        ), 
               file)
   }
 )
