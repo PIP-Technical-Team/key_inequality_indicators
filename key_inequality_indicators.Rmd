@@ -171,77 +171,18 @@ dt_pip <- joyn::joyn(
   by = c("country_code = code"), 
   keep = "left", 
   match_type = "m:1",
-  #y_vars_to_keep = "incgroup_current", 
   reportvar = FALSE, 
   verbose = FALSE
 )
 ```
 
-```{r pfw}
-# pfw <- haven::read_dta("data/pfw_v11.dta") |>
-#   filter(survey_coverage == "N" | code %in% c("ARG")) |>
-#   filter(display_cp == 1) |>
-#   rename(country_code = code, year_temp  = rep_year) |>
-#   mutate(welfare_type = ifelse(datatype %in% c("C", "c"), "consumption", "income")) |>
-#   select(-year) |>
-#   rename(year = year_temp) |>
-#   distinct()
-# 
-# data <- left_join(dt_pip, 
-#                   pfw, 
-#                   by = c("country_code", "year", "welfare_type"),
-#                   reportvar = F)
-# 
-# data <- data |>
-#   filter(year >= 2000) |>
-#   group_by(country_code) |>
-#   mutate(weightall = 1 / n()) |>
-#   group_by(country_code, welfare_type) |>
-#   mutate(weighttype = 1 / n()) |>
-#   ungroup()
-```
-
 
 ```{r create-high-ineq}
-# dt_ineq <- expand.grid(country_code = data$country_code |> unique(), 
-#                                year = c(2000:2022)) |> 
-#   joyn::joyn(y = data |> #dt_pip |> 
-#                # fsubset(year >= 2000 & year <= 2022) |> 
-#                fsubset(reporting_level == "national" | country_code == "ARG") |> 
-#                fselect(country_code, 
-#                        year, 
-#                        country_name, 
-#                        reporting_level, 
-#                        welfare_type, 
-#                        region_name, 
-#                        region_code, 
-#                        gini, 
-#                        incgroup_current, 
-#                        fcv_current, 
-#                        ida_current), 
-#                match_type = "1:1", 
-#                by = c("country_code", "year"), 
-#                keep = "left", 
-#                verbose = FALSE, 
-#                reportvar = FALSE) |> 
-#   arrange(country_code, year)
 dt_ineq <- haven::read_dta(file = "data/gini_intermediate_all 1.dta") |> 
   arrange(country_code, year)
 
-  # dt_pip |> 
-  # fsubset(year >= 2000 & year <= 2022), 
-  # match_type = "1:1",
-  # by = c("country_code", 
-  #        "year"#, 
-  #        #"reporting_level"#, 
-  #        #"welfare_type"
-  #        ), 
-  # verbose = FALSE)
 
 dt_ineq <- dt_ineq  |>
-  
-  
-  
   fgroup_by(country_code) |>
   fmutate(
     giniever = gini,
@@ -282,25 +223,36 @@ dt_ineq <- dt_ineq  |>
           region_code = na_locf(region_code),
           region_code = na_focb(region_code)) |>
   fungroup()
-  # fselect(-c(incgroup_current, "ida_current", "fcv_current"))
-  # joyn::joyn(y = dt_class |> fselect(country_code = code, region_code = region_pip, incgroup_current, ida_current, fcv_current) |> 
-  #              funique(), 
-  #            keep = "left", 
-  #            match_type = "m:1", 
-  #            by = c("country_code"))
-
 
 # add population var
 dt_ineq <- dt_ineq |> 
   joyn::joyn(y = pop |> 
                fsubset(data_level == "national") |> 
                frename(pop = value), 
-             by = c("country_code", "year"), 
+             by         = c("country_code", 
+                            "year"), 
              match_type = "1:1", 
-             keep = "left", 
-             verbose = FALSE, 
-             reportvar = FALSE)
-
+             keep       = "left", 
+             verbose    = FALSE, 
+             reportvar  = FALSE)
+dt_ineq$region_name <- NULL
+dt_ineq <- dt_ineq |> 
+  joyn(y          = dt_pip |> 
+         fselect(country_code, 
+                 year, 
+                 region_name, 
+                 survey_comparability, 
+                 comparable_spell, 
+                 reporting_level), 
+       by         = c("country_code", "year"), 
+       match_type = "1:1", 
+       keep       = "left", 
+       reportvar  = FALSE, 
+       verbose    = FALSE) |> 
+  fgroup_by(country_code) |> 
+  fmutate(region_name = na_locf(region_name), 
+          region_name = na_focb(region_name)) |> 
+  fungroup()
 ```
 
 
@@ -390,7 +342,7 @@ create_data_imputed_by_countries <- function(
   
   # Filter by year and country name
   dt_use <- dt_use[        # window length
-    year %chin% c( (year_selected - window_length):
+    year %chin% c( (year_selected - window_length) :
                      (year_selected + window_length))
   ]
   dt_use <- dt_use[
@@ -419,7 +371,7 @@ create_data_imputed_by_countries <- function(
            ][
              missing == FALSE
              ][, 
-               .(Forward = min(year)-year_selected), 
+               .(Forward = min(year) - year_selected), 
                by = country_name
                ]
 dt_backward <- 
@@ -429,7 +381,7 @@ dt_backward <-
          ][
            missing == FALSE
            ][, 
-             .(Backward = abs(max(year)-year_selected)), 
+             .(Backward = abs(max(year) - year_selected)), 
              by = country_name
              ]
 
@@ -482,7 +434,7 @@ dt_use <- joyn::joyn(
     # Backward fill for Impute_Forward == TRUE
     survey_comparability[Impute_Forward == TRUE] <- na.locf(
       survey_comparability[Impute_Forward == TRUE], 
-             fromLast=TRUE)
+             fromLast = TRUE)
     # Return the modified Indicator
     survey_comparability
   }, by = country_name]
@@ -490,7 +442,7 @@ dt_use <- joyn::joyn(
   # Years over which change occurs
   dt_use[
     , 
-  ImputeYears:= min(Forward, Backward), 
+  ImputeYears := min(Forward, Backward), 
   by = country_name
   ]
  dt_use[
@@ -1142,7 +1094,7 @@ output$DownloadButtonTrends2 <- downloadHandler(
 
 
 
-Change over Time
+Change over time
 ===========================================================
 
 
@@ -1390,11 +1342,7 @@ setnames(
   old = c("country_name", "year", "region_name", "Indicator1", "AnnualizedChange"), 
   new = c("Country", "Year", "Region", str_to_title(input$ineq_indicator), "Annualized_Change")
 )
-# setnames(
-#   dt, 
-#   old = c("IndicatorX", "IndicatorY"), 
-#   new = c(input$ineq_indicatorX, input$ineq_indicatorY)
-# )
+
 output$DownloadButtonChange <- downloadHandler(
   filename = function() {
     paste("PIP-key-ineq-indicators-change", Sys.Date(), ".csv", sep = "")
@@ -2005,19 +1953,6 @@ dark2_palette <- brewer.pal(n = 3, name = "Dark2")
 
 # Rearrange the colors (B, C, A)
 custom_palette <- dark2_palette[c(2, 3, 1)]
-# 
-# scale_colour_brewer_d <- function(..., palette = "Dark2") {
-#   scale_colour_brewer(..., palette = custom_palette )
-# }
-# 
-# scale_fill_brewer_d <- function(..., palette = "Dark2") {
-#   scale_fill_brewer(..., palette = custom_palette)
-# }
-# 
-# options(
-#   ggplot2.discrete.colour = scale_colour_brewer_d,
-#   ggplot2.discrete.fill = scale_fill_brewer_d
-# )
 
 ```
 
@@ -2080,17 +2015,22 @@ conditionalPanel(
               ),
               selected = "Global", 
               multiple = FALSE))
+```
 
-
+Download aggregated data:
+```{r}
 downloadButtonRmd(
-  outputId = "DownloadButtonHighIneq", 
-  label    = "CSV"
+  outputId = "DownloadButtonHighIneqFigure", 
+  label    = "Figure data"
 )
+```
 
-# downloadButtonRmd(
-#   outputId = "DownloadButtonScatterplot", 
-#   label = "CSV"
-# )
+Download country-level data:
+```{r}
+downloadButtonRmd(
+  outputId = "DownloadButtonHighIneqCountryLevel", 
+  label    = "Country-level data"
+)
 
 ```
 
@@ -2102,9 +2042,10 @@ Column {.tabset}
 
 ```{r}
 
-renderPlotly({
+aggregated_ineq_data <- reactive({
   
-  if (input$high_ineq_plot == "Number over time") {
+  
+   if (input$high_ineq_plot == "Number over time") {
       if (!input$high_ineq_region == "Global") {
         p <- dt_ineq |>
           fsubset(region_code == as.character(input$high_ineq_region))
@@ -2124,31 +2065,6 @@ renderPlotly({
                                       "Count: ", country_count, "\n", 
                                       "Ineq. group: ", ineq_type)) |> 
           fmutate(country_count = as.double(country_count))
-      
-        p <- p |> 
-        ggplot(aes(x     = year,
-                   y     = country_count, 
-                   fill  = ineq_type, 
-                   color = ineq_type, 
-                   text  = text_tooltip)) +
-        geom_col(position = position_stack(), alpha = 0.8) +
-        geom_text(aes(label = country_count),
-                position  = position_stack(vjust = .5), 
-                color = "black") + 
-  #scale_y_continuous(limits = c(0, 175)) +
-        theme_classic() +  
-        labs(title = paste0("Number of economies in each inequality category, ", 
-                            region_matching[region_code == input$high_ineq_region, ]$region_name),
-             x = "Year",
-             y = "Number of economies") +
-        guides(color = "none") + 
-        guides(fill = guide_legend(title = "Inequality group")) + 
-  scale_fill_manual(values = custom_palette) +
-  scale_color_manual(values = custom_palette)
-      
-        ggplotly(p, 
-                 tooltip = "text")
-        
   } else if (input$high_ineq_plot == "By selected group") {
     
           gb <- switch(input$high_ineq_group_by, 
@@ -2185,28 +2101,6 @@ renderPlotly({
                                   input$high_ineq_group_by, ": ", Group)) |> 
     fungroup()
   
-  p <- p |>
-    ggplot(aes(x     = Group,
-               y     = use,
-               fill  = ineq_type, 
-               color = ineq_type, 
-               text  = text_tooltip)) +
-    geom_bar(stat     = 'identity',
-             position = 'stack', 
-             alpha    = 0.8) +
-    theme_classic() +  
-    labs(title = paste0("Share of economies in different inequality categories, by ", input$high_ineq_group_by),
-         x = input$high_ineq_group_by,
-         y = "Share of economies, %") +
-    guides(color = "none") + 
-    scale_y_continuous(labels = scales::percent) +
-    guides(fill = guide_legend(title = "Inequality group")) + 
-  scale_fill_manual(values = custom_palette) +
-  scale_color_manual(values = custom_palette)
-  
-  ggplotly(p, 
-           tooltip = "text")
-  
   } else if (input$high_ineq_plot == "Pop. over time"){
     
       if (!input$high_ineq_pop == "Global") {
@@ -2232,7 +2126,67 @@ renderPlotly({
                                         "Pop share: ", popsh, "\n", 
                                         "Ineq. group: ", ineq_type)) |> 
           fungroup()
+        
+  }
+  
+  p
+  
+})
+
+renderPlotly({
+  
+  p <- aggregated_ineq_data()
+  
+  if (input$high_ineq_plot == "Number over time") {
+    p <- p |> 
+        ggplot(aes(x     = year,
+                   y     = country_count, 
+                   fill  = ineq_type, 
+                   color = ineq_type, 
+                   text  = text_tooltip)) +
+        geom_col(position = position_stack(), alpha = 0.8) +
+        geom_text(aes(label = country_count),
+                position  = position_stack(vjust = .5), 
+                color = "black") + 
+        theme_classic() +  
+        labs(title = paste0("Number of economies in each inequality category, ", 
+                            region_matching[region_code == input$high_ineq_region, ]$region_name),
+             x = "Year",
+             y = "Number of economies") +
+        guides(color = "none") + 
+        guides(fill = guide_legend(title = "Inequality group")) + 
+  scale_fill_manual(values = custom_palette) +
+  scale_color_manual(values = custom_palette)
       
+        ggplotly(p, 
+                 tooltip = "text")
+        
+  } else if (input$high_ineq_plot == "By selected group") {
+    
+  p <- p |>
+    ggplot(aes(x     = Group,
+               y     = use,
+               fill  = ineq_type, 
+               color = ineq_type, 
+               text  = text_tooltip)) +
+    geom_bar(stat     = 'identity',
+             position = 'stack', 
+             alpha    = 0.8) +
+    theme_classic() +  
+    labs(title = paste0("Share of economies in different inequality categories, by ", input$high_ineq_group_by),
+         x = input$high_ineq_group_by,
+         y = "Share of economies, %") +
+    guides(color = "none") + 
+    scale_y_continuous(labels = scales::percent) +
+    guides(fill = guide_legend(title = "Inequality group")) + 
+  scale_fill_manual(values = custom_palette) +
+  scale_color_manual(values = custom_palette)
+  
+  ggplotly(p, 
+           tooltip = "text")
+  
+  } else if (input$high_ineq_plot == "Pop. over time") {
+    
         p <- p |> 
         ggplot(aes(x     = year,
                    y     = popsh, 
@@ -2262,42 +2216,49 @@ renderPlotly({
 
 })
 
-
-
-output$DownloadButtonScatterplot <- downloadHandler(
-  filename = function() {
-    paste("PIP-key-ineq-indicators-scatterplot", Sys.Date(), ".csv", sep = "")
-  },
-  content = function(file) {
-    write.csv(
-      dt |> 
-        frename(economy_name = country_name)
-      , file)
+reactive({
+  figure_data_use <- aggregated_ineq_data()
+  
+  if ("use" %in% colnames(figure_data_use)) {
+    figure_data_use <- figure_data_use |> 
+      frename(share = use)
   }
-)
+
+  output$DownloadButtonHighIneqFigure <- downloadHandler(
+    filename = function() {
+      paste("PIP-key-ineq-indicators-highineq-figure-data-", Sys.Date(), ".csv", sep = "")
+    },
+    content = function(file) {
+      write.csv(figure_data_use, 
+                file)
+    }
+  )
+})
 
 
-output$DownloadButtonHighIneq <- downloadHandler(
+
+output$DownloadButtonHighIneqCountryLevel <- downloadHandler(
   filename = function() {
     paste("PIP-key-ineq-indicators-high-ineq-", Sys.Date(), ".csv", sep = "")
   },
   content = function(file) {
     write.csv(dt_ineq |> 
-                fselect(economy_code = country_code, 
+                fselect(economy_code               = country_code, 
                         region_code, 
                         region_name, 
                         year, 
                         welfare_time, 
                         welfare_type, 
-                        survey_gini = gini, 
+                        reporting_level,
+                        survey_gini                = gini, 
                         gini_for_inequality_groups = giniever, 
-                        incgroup_current, 
-                        ida_current, 
-                        fcv_current, 
-                        pop#,
-                        #survey_coverage, 
-                        #comparable_spell
-                        ), 
+                        incgroup_FY24              = incgroup_current, 
+                        ida_FY24                   = ida_current, 
+                        fcv_FY24                   = fcv_current, 
+                        pop,
+                        ineq_group                 = ineq_type,
+                        survey_comparability, 
+                        comparable_spell), 
               file)
   }
 )
