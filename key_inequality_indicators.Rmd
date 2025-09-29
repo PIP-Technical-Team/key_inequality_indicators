@@ -52,15 +52,19 @@ library("highcharter")
 
 ```{r map-data}
 #load(here::here("data", "WB_geojson.Rdata"))
-pop <- pipr::get_aux(table = "pop")
+pop <- pipr::get_aux(table  = "pop")
 pop <- pop |> 
   fmutate(year = as.numeric(levels(year))[year]) |> 
   fsubset(year >= 2000)
+vrs <- pipr::get_versions()
+vrs <- paste0(vrs$release_version, 
+              "_",
+              vrs$ppp_version)
 ```
 
 
 ```{r setup-data, include=FALSE}
-source_text <- paste("Source: World Bank, Poverty and Inequality Platform (version 20230919_2017).")
+source_text <- paste0("Source: World Bank, Poverty and Inequality Platform (version ", vrs, ")")
 
 # Total pip output
 
