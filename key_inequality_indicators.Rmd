@@ -1,26 +1,18 @@
 ---
-title: 'Key Inequality Indicators'
+title: "Key Inequality Indicators"
 output:
   flexdashboard::flex_dashboard:
     orientation: columns
     social: menu
     theme: paper
-      # version: 4
-      # #primary: "#FFF"
-      # #navbar-bg: "#22A6F5"
-      # base_font: 
-      #   google: Lato
-      # heading_font:
-      #   google: Lato
-      # code_font:
-      #   google: 
-      #     # arguments to sass::font_google() 
-      #     family: Lato
-      #     local: false
 runtime: shiny
 resource_files:
 - data/CLASS.dta
 - data/CLASS.dta
+- data/vrs.qs
+- data/dt_pip.fst
+- data/dt_ineq.fst
+- data/pop.fst
 ---
 
 
@@ -46,49 +38,40 @@ library("zoo")
 library("RColorBrewer")
 library("collapse")
 library("highcharter")
+library("labelled")
+library("haven")
 ```
 
-
-
-```{r map-data}
-#load(here::here("data", "WB_geojson.Rdata"))
-pop <- pipr::get_aux(table  = "pop")
-pop <- pop |> 
-  fmutate(year = as.numeric(levels(year))[year]) |> 
-  fsubset(year >= 2000)
-vrs <- pipr::get_versions()
-vrs <- paste0(vrs$release_version, 
-              "_",
-              vrs$ppp_version)
-```
 
 
 ```{r setup-data, include=FALSE}
+
+vrs <- 
+  qs::qread(file = fs::path("data", 
+                            "vrs.qs"))
+pop <- 
+  fst::read.fst(fs::path("data", 
+                         "pop.fst"), 
+                as.data.table = TRUE)
+dt_pip <- 
+  fst::read.fst(fs::path("data", 
+                         "dt_pip.fst"), 
+                as.data.table = TRUE)
+dt_ineq <- 
+  fst::read.fst(fs::path("data", 
+                         "dt_ineq.fst"), 
+                as.data.table = TRUE)
 source_text <- paste0("Source: World Bank, Poverty and Inequality Platform (version ", vrs, ")")
+```
 
-# Total pip output
-
-# Step 1: data ----
-dt_pip <- pipr::get_stats() |> 
-  qDT()# as data.table
-dt_pip[
-  , 
-  `:=`(
-    top_10_bottom_40_ratio = (decile10)/(decile1 + decile2 + decile3 + decile4), 
-    top_20_bottom_20_ratio = (decile10+decile9)/(decile1 + decile2)
-  )
-]
-dt_pip[, 
-       gini := gini*100]
-
-
+```{r}
 # Step 2: creating general objects ----
 pip_countries <- unique(dt_pip$country_name) # list of countries
 pip_countries_multiple_welfare_type <- 
   dt_pip[, 
          if(.N>1) .SD, 
          by = .(country_name, year, welfare_type)
-         ]$country_name |>
+  ]$country_name |>
   unique()
 
 pip_countries_multiple_reporting_level <- 
@@ -96,15 +79,15 @@ pip_countries_multiple_reporting_level <-
          if(.N > 1) 
            .SD, 
          by = .(country_name, year, reporting_level)
-         ]$country_name |> 
+  ]$country_name |> 
   unique()
 
 pip_countries_regions <- 
   unique(dt_pip, 
          by = c("country_name", "region_code")
-         )[, 
-           .(country_name, region_code, region_name)
-           ]
+  )[, 
+    .(country_name, region_code, region_name)
+  ]
 region_matching <- unique(
   dt_pip[
     ,
@@ -115,149 +98,8 @@ region_matching <- unique(
 region_matching <- rowbind(region_matching, 
                            data.table(region_code = "Global", 
                                       region_name = "Global"))
-# Exclude double rows
-dt_pip <- 
-  dt_pip[, 
-         if (.N > 1) {
-           .SD[!reporting_level == "rural"] 
-          } else {
-            .SD
-            }, 
-         by = .(country_name, year, welfare_type)
-         ][, 
-           if (.N > 1) {
-             .SD[reporting_level == "national"] 
-             } else {
-               .SD
-               }, 
-           by = .(country_name, year, welfare_type)
-           ]
-dt_pip <- 
-  dt_pip[, 
-         if (.N > 1) {
-           .SD[welfare_type == "income"] 
-           } else {
-             .SD
-             }, 
-         by = .(country_name, year, reporting_level)
-         ]
-# make deciles percentages
-dec_cols <- paste0("decile", 1:10)
-
-# Multiply each decile column by 100
-dt_pip[, (paste0("decile", 1:10)) := lapply(.SD, function(x) x * 100), .SDcols = paste0("decile", 1:10)]
-
-# Income groups
-dt_class <- haven::read_dta(
-  here::here("data", "CLASS.dta")
-)
-dt_class <- dt_class |> 
-  as.data.table() |> 
-  unique(
-    by = c("economy", "incgroup_current")
-  )
-# Clean country names
-dt_class[
-  38, 
-  economy := "Cote d'Ivoire"
-]
-dt_class[
-  179, 
-  economy := "Sao Tome and Principe"
-]
-dt_class[
-  198, 
-  economy := "Turkiye"
-]
-dt_pip <- joyn::joyn(
-  x = dt_pip, 
-  y = dt_class, 
-  by = c("country_code = code"), 
-  keep = "left", 
-  match_type = "m:1",
-  reportvar = FALSE, 
-  verbose = FALSE
-)
 ```
 
-
-```{r create-high-ineq}
-dt_ineq <- haven::read_dta(file = "data/gini_intermediate_all 1.dta") |> 
-  arrange(country_code, year)
-
-
-dt_ineq <- dt_ineq  |>
-  fgroup_by(country_code) |>
-  fmutate(
-    giniever = gini,
-    giniever = na_locf(giniever), # Forward fill
-    #giniever = na.fill(giniever, fill = NA), # Ensure no trailing NAs, 
-    giniever = na_focb(giniever)) |>  # Backward fill
-  #fungroup() |> 
-  
-  
-  
-  fselect( country_code, year, region_code, region_name,
-           welfare_time,
-           welfare_type,
-           #reporting_level,
-           gini,
-         incgroup_current, ida_current, fcv_current, giniever) |> 
-  fmutate(highinequality = giniever > 40) |> 
-  fmutate(ineq_type = fifelse(giniever < 30 , "Low inequality (<30)",
-                             fifelse(giniever > 40, "High inequality (>40)", 
-                                     "Moderate inequality (30-40)"))) |> 
-  fmutate(country_count = 1L) |> 
-  fmutate(incgroup_current = factor(incgroup_current, 
-                                    levels = c("LIC", 
-                                               "LMIC", 
-                                               "UMIC", 
-                                               "HIC"))) |> 
-  fmutate(region_code = fifelse(region_code == "", NA, region_code)) |> 
-  fmutate(incgroup_current = fifelse(incgroup_current == "", NA, incgroup_current)) |> 
-  fmutate(incgroup_current = na_locf(incgroup_current),
-          incgroup_current = na_focb(incgroup_current),
-
-          ida_current = na_locf(ida_current),
-          ida_current = na_focb(ida_current),
-
-          fcv_current = na_locf(fcv_current),
-          fcv_current = na_focb(fcv_current),
-
-          region_code = na_locf(region_code),
-          region_code = na_focb(region_code)) |>
-  fungroup()
-
-# add population var
-dt_ineq <- dt_ineq |> 
-  joyn::joyn(y = pop |> 
-               fsubset(data_level == "national") |> 
-               frename(pop = value), 
-             by         = c("country_code", 
-                            "year"), 
-             match_type = "1:1", 
-             keep       = "left", 
-             verbose    = FALSE, 
-             reportvar  = FALSE)
-dt_ineq$region_name <- NULL
-dt_ineq <- dt_ineq |> 
-  joyn(y          = dt_pip |> 
-         fselect(country_code, 
-                 year, 
-                 region_name, 
-                 survey_comparability, 
-                 comparable_spell, 
-                 reporting_level), 
-       by         = c("country_code", "year"), 
-       match_type = "1:1", 
-       keep       = "left", 
-       reportvar  = FALSE, 
-       verbose    = FALSE) |> 
-  fgroup_by(country_code) |> 
-  fmutate(region_name = na_locf(region_name), 
-          region_name = na_focb(region_name)) |> 
-  fungroup()
-```
 
 
 
@@ -1666,9 +1508,9 @@ dt_use_sp <- reactive({
   ]
   dt_use_sp[
     , 
-    `Income Group` := incgroup_current
+    `Income Group` := incgroup
   ]
-  # factor(incgroup_current, levels = incgroup_current[order(mean)])]
+  # factor(incgroup, levels = incgroup[order(mean)])]
   # Define tooltip
   dt_use_sp[
     , 
@@ -1676,7 +1518,7 @@ dt_use_sp <- reactive({
       paste0(
         "Economy: ", country_name, "\n",
         "Region: ", region_name,  "\n",
-        "Income Group: ", incgroup_current, "\n",
+        "Income Group: ", incgroup, "\n",
         input$ineq_indicatorX, ": ", round(IndicatorX,2),  "\n",
         input$ineq_indicatorY, ": ", round(IndicatorY, 2),  "\n",
         "Survey type: ", str_to_title(welfare_type)
@@ -1686,7 +1528,7 @@ dt_use_sp <- reactive({
 col_vec <- c()
 all_cntr <- dt_use_sp$country_name 
 reg <- dt_use_sp$region_name
-inc <- dt_use_sp$incgroup_current
+inc <- dt_use_sp$incgroup
 dt <- data.table(all_cntr = all_cntr, reg = reg)
 # Conditionally define 'bla' based on the value of 'Check'
 if (input$color_by == "Region") {
@@ -1703,7 +1545,7 @@ col_vec <- dt$col_vec
 #     Color = ifelse(
 #       country_name %chin% selected_countries(), 
 #       ifelse(
-#         input$color_by == "Region", dt_use_sp$region_name, dt_use_sp$incgroup_current
+#         input$color_by == "Region", dt_use_sp$region_name, dt_use_sp$incgroup
 #       ), 
 #       "Other"
 #     )
@@ -2072,7 +1914,7 @@ aggregated_ineq_data <- reactive({
   } else if (input$high_ineq_plot == "By selected group") {
     
           gb <- switch(input$high_ineq_group_by, 
-               "Income groups" = "incgroup_current", 
+               "Income groups" = "incgroup", 
                "Regions"       = "region_code", 
                "FCV"           = "fcv_current", 
                "IDA"           = "ida_current", 
