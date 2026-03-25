@@ -215,7 +215,7 @@ data <- data %>%
 # The necessary variable is in the frameworks dataset (provided by Minh)
 # Source: "https://github.com/PIP-Technical-Team/aux_pfw/blob/DEV/pfw.dta"
 #################################################################################
-pfw <- read_dta(fs::path("data", "pfw_v11.dta")) %>%
+pfw <- read_dta(fs::path("data", "pfw.dta")) %>%
   filter(survey_coverage == "N" | code %in% c("ARG")) %>%
   filter(display_cp == 1) %>%
   rename(country_code = code, year_temp  = rep_year) %>%
